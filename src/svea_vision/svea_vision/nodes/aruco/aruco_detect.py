@@ -7,7 +7,7 @@ from cv2 import aruco
 import rclpy
 from rclpy.node import Node
 import tf2_ros
-import tf_conversions
+import tf_transformations
 from message_filters import TimeSynchronizer, Subscriber
 from sensor_msgs.msg import Image, CameraInfo
 from aruco_msgs.msg import Marker
@@ -102,8 +102,8 @@ class ArucoDetect(Node):
             mtx[:3, :3] = cv2.Rodrigues(rvec)[0]
             mtx[:3, 3] = tvec
             mtx[3, 3] = 1
-            translation = tf_conversions.transformations.translation_from_matrix(mtx)
-            rotation = tf_conversions.transformations.quaternion_from_matrix(mtx)
+            translation = tf_transformations.translation_from_matrix(mtx)
+            rotation = tf_transformations.quaternion_from_matrix(mtx)
 
             ## Broadcast
 
@@ -111,7 +111,7 @@ class ArucoDetect(Node):
             t.header = image.header
             t.child_frame_id = self.ARUCO_TF_NAME + str(aruco_id)
             t.transform.translation = Point(*translation)
-            t.transform.rotation = Quaternion(*rotation)
+            t.transform.rotation = Quaternion(x=rotation[0], y=rotation[1], z=rotation[2], w=rotation[3])
 
             self.br.sendTransform(t)
 
@@ -121,7 +121,7 @@ class ArucoDetect(Node):
             marker.header = image.header
             marker.id = int(aruco_id)
             marker.pose.pose.position = Point(*translation)
-            marker.pose.pose.orientation = Quaternion(*rotation)
+            marker.pose.pose.orientation = Quaternion(x=rotation[0], y=rotation[1], z=rotation[2], w=rotation[3])
             marker.confidence = 1  # NOTE: Set this to something more relevant?
 
             self.pub_aruco_pose.publish(marker)

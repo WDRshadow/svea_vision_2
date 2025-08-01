@@ -60,28 +60,27 @@ def generate_launch_description():
         #     parameters=[{'yaml_filename': LaunchConfiguration('map_path')}]
         # ),
 
-        # ZED Camera wrapper (commented out - needs zed_wrapper package for ROS2)
-        # Note: This would need to be replaced with the ROS2 version of zed_wrapper
-        # GroupAction([
-        #     IncludeLaunchDescription(
-        #         PathJoinSubstitution([
-        #             FindPackageShare('zed_wrapper'),
-        #             'launch',
-        #             'zed_no_tf.launch.py'
-        #         ]),
-        #         launch_arguments={
-        #             'camera_name': LaunchConfiguration('camera_name'),
-        #             'camera_model': LaunchConfiguration('camera_model'),
-        #             'base_frame': LaunchConfiguration('zed_base_frame'),
-        #             'cam_pos_x': LaunchConfiguration('zed_cam_pos_x'),
-        #             'cam_pos_y': LaunchConfiguration('zed_cam_pos_y'),
-        #             'cam_pos_z': LaunchConfiguration('zed_cam_pos_z'),
-        #             'cam_roll': LaunchConfiguration('zed_cam_roll'),
-        #             'cam_pitch': LaunchConfiguration('zed_cam_pitch'),
-        #             'cam_yaw': LaunchConfiguration('zed_cam_yaw'),
-        #         }.items()
-        #     )
-        # ], scoped=True),
+        # ZED Camera wrapper
+        GroupAction([
+            IncludeLaunchDescription(
+                PathJoinSubstitution([
+                    FindPackageShare('zed_wrapper'),
+                    'launch',
+                    'zed_no_tf.launch.py'
+                ]),
+                launch_arguments={
+                    'camera_name': LaunchConfiguration('camera_name'),
+                    'camera_model': LaunchConfiguration('camera_model'),
+                    'base_frame': LaunchConfiguration('zed_base_frame'),
+                    'cam_pos_x': LaunchConfiguration('zed_cam_pos_x'),
+                    'cam_pos_y': LaunchConfiguration('zed_cam_pos_y'),
+                    'cam_pos_z': LaunchConfiguration('zed_cam_pos_z'),
+                    'cam_roll': LaunchConfiguration('zed_cam_roll'),
+                    'cam_pitch': LaunchConfiguration('zed_cam_pitch'),
+                    'cam_yaw': LaunchConfiguration('zed_cam_yaw'),
+                }.items()
+            )
+        ], scoped=True),
 
         # Include object_pose launch
         IncludeLaunchDescription(

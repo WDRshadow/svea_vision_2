@@ -16,7 +16,10 @@ setup(
     install_requires=[
         'setuptools',
         'ultralytics==8.2.0',
-        'filterpy'
+        'filterpy',
+        'numba',
+        'pandas',
+        'numpy'
     ],
     zip_safe=True,
     maintainer='jackdaw',

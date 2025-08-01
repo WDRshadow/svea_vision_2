@@ -7,19 +7,17 @@ __license__ = "MIT"
 import rclpy
 from rclpy.node import Node
 import tf2_ros
-import tf.transformations as tr
+import tf_transformations as tr
 import message_filters as mf
 from sensor_msgs.msg import Image, PointCloud2
 from nav_msgs.msg import OccupancyGrid
 from geometry_msgs.msg import PoseStamped, Transform
+from cv_bridge import CvBridge
+import sensor_msgs_py.point_cloud2 as pc2
 
 import time
 import numpy as np
 import numba as nb
-
-np.float = float    # NOTE: Temporary fix for ros_numpy issue; check #39
-import ros_numpy
-
 
 def load_param(node, name, default_value=None):
     node.declare_parameter(name, default_value)
@@ -111,6 +109,9 @@ class SidewalkMapper(Node):
             # Sleep for 1 sec for tf2 to populate the buffer
             import time
             time.sleep(1.0)
+
+            # Initialize CvBridge
+            self.cv_bridge = CvBridge()
             
             # Initialize occupancy grid message
             self.sidewalk_occupancy_grid = OccupancyGrid()
@@ -163,13 +164,12 @@ class SidewalkMapper(Node):
         transform.translation = filtered_pose_msg.pose.position
         transform.rotation = filtered_pose_msg.pose.orientation
         
-        # Convert ROS PointCloud2 message to numpy array
-        pointcloud_data = ros_numpy.numpify(pointcloud_msg)
-        pointcloud_data = ros_numpy.point_cloud2.get_xyz_points(pointcloud_data, remove_nans=False)
-        pointcloud_data = pointcloud_data.reshape(-1, 3)
-        
-        # Convert ROS Image message to numpy array
-        sidewalk_mask = ros_numpy.numpify(sidewalk_mask_msg)
+        # ===== Convert ROS2 PointCloud2 → numpy Nx3 =====
+        points = list(pc2.read_points(pointcloud_msg, field_names=['x', 'y', 'z'], skip_nans=False))
+        pointcloud_data = np.array(points, dtype=np.float32).reshape(-1, 3)
+
+        # ===== Convert ROS2 Image → numpy（bool mask） =====
+        sidewalk_mask = self.cv_bridge.imgmsg_to_cv2(sidewalk_mask_msg, desired_encoding='passthrough')
         sidewalk_mask = sidewalk_mask.astype(bool).reshape(-1)
         
         convert_time = time.time()

@@ -27,18 +27,17 @@ def generate_launch_description():
         DeclareLaunchArgument('depth_image', default_value='/zed/zed_node/depth/depth_registered', description='Depth image topic'),
         DeclareLaunchArgument('image', default_value='/zed/zed_node/rgb/image_rect_color', description='RGB image topic'),
 
-        # ZED Camera launch (commented out - needs zed_wrapper package for ROS2)
-        # Note: This would need to be replaced with the ROS2 version of zed_wrapper
-        # IncludeLaunchDescription(
-        #     PathJoinSubstitution([
-        #         FindPackageShare('zed_wrapper'),
-        #         'launch',
-        #         'zed.launch.py'
-        #     ]),
-        #     launch_arguments={
-        #         'camera_name': 'zed',
-        #     }.items()
-        # ),
+        # ZED Camera launch
+        IncludeLaunchDescription(
+            PathJoinSubstitution([
+                FindPackageShare('zed_wrapper'),
+                'launch',
+                'zed.launch.py'
+            ]),
+            launch_arguments={
+                'camera_name': 'zed',
+            }.items()
+        ),
 
         # Conditional map server (commented out - needs nav2_map_server package)
         # Node(
