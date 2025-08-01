@@ -1,7 +1,10 @@
 import os
-import rosbag
+from rosbag2_py import SequentialReader, StorageOptions, ConverterOptions
 import pandas as pd
-import rospy_message_converter.message_converter as converter
+from rosidl_runtime_py.convert import message_to_ordereddict
+from rclpy.serialization import deserialize_message
+from rosidl_runtime_py.utilities import get_message
+import sqlite3
 
 # Define the current working directory
 CURRENT_FILE = os.getcwd()
@@ -87,21 +90,33 @@ def save_data(results_path, data_path, topics):
 
     Args:
         results_path (str): The directory path where CSV files will be saved.
-        data_path (str): The file path of the ROS bag file (without the .bag extension).
+        data_path (str): The file path of the ROS bag directory.
     """
-    bag = rosbag.Bag(data_path + '.bag')
+    reader = SequentialReader()
+    storage_options = StorageOptions(uri=data_path, storage_id='sqlite3')
+    converter_options = ConverterOptions('', '')
+    reader.open(storage_options, converter_options)
     
     create_dir(results_path)
     datasets = {}
 
-    for topic, msg, t in bag.read_messages(topics=topics):
-        data_dict = converter.convert_ros_message_to_dictionary(msg)
-        processed_data = process_data(data_dict)
+    topic_types = reader.get_all_topics_and_types()
+    type_map = {topic.name: topic.type for topic in topic_types}
 
-        if topic not in datasets:
-            datasets[topic] = pd.DataFrame(processed_data)
-        else:
-            datasets[topic] = pd.concat([datasets[topic], pd.DataFrame(processed_data)], ignore_index=True)
+    while reader.has_next():
+        (topic, data, timestamp) = reader.read_next()
+        if topic in topics:
+            msg_type = get_message(type_map[topic])
+            msg = deserialize_message(data, msg_type)
+            data_dict = message_to_ordereddict(msg)
+            processed_data = process_data(data_dict)
+
+            if topic not in datasets:
+                datasets[topic] = pd.DataFrame(processed_data)
+            else:
+                datasets[topic] = pd.concat([datasets[topic], pd.DataFrame(processed_data)], ignore_index=True)
+
+    reader.close()
 
     for topic, df in datasets.items():
         data_file_path = os.path.join(results_path, topic.replace('/', '_') + '.csv')

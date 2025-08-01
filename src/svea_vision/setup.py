@@ -23,7 +23,6 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'talker = svea_vision.talker:main',
             'aruco_detect = svea_vision.scripts.aruco_detect:main',
             'static_image_publisher = svea_vision.scripts.static_image_publisher:main',
             'object_detect = svea_vision.scripts.object_detect:main',
