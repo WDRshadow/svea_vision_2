@@ -4,20 +4,15 @@ import numpy as np
 import cv2
 from cv2 import aruco
 
-import rospy
+import rclpy
+from rclpy.node import Node
 import tf2_ros
 import tf_conversions
-import message_filters as mf
+from message_filters import TimeSynchronizer, Subscriber
 from sensor_msgs.msg import Image, CameraInfo
 from aruco_msgs.msg import Marker
 from geometry_msgs.msg import TransformStamped, Point, Quaternion
 from cv_bridge import CvBridge
-
-
-def load_param(name, value=None):
-    if value is None:
-        assert rospy.has_param(name), f'Missing parameter "{name}"'
-    return rospy.get_param(name, value)
 
 
 def replace_base(old, new):
@@ -30,22 +25,28 @@ def replace_base(old, new):
     return "/".join(ns)
 
 
-class aruco_detect:
+class ArucoDetect(Node):
     def __init__(self):
-        ## Initialize node
+        super().__init__("aruco_detect")
 
-        rospy.init_node("aruco_detect")
+        ## CV Bridge
+        self.bridge = CvBridge()
 
         ## Parameters
+        self.declare_parameter("sub_image", "")
+        self.declare_parameter("aruco_dict", "DICT_4X4_250")
+        self.declare_parameter("aruco_size", "0.05")
+        self.declare_parameter("aruco_tf_name", "aruco")
+        self.declare_parameter("pub_aruco_pose", "aruco_pose")
 
-        self.SUB_IMAGE = load_param("~sub_image")
+        self.SUB_IMAGE = self.get_parameter("sub_image").get_parameter_value().string_value
         self.SUB_CAMERA_INFO = replace_base(self.SUB_IMAGE, "camera_info")
 
-        self.ARUCO_DICT_NAME = load_param("~aruco_dict", "DICT_4X4_250")
-        self.ARUCO_SIZE = load_param("~aruco_size", "0.05")
-        self.ARUCO_TF_NAME = load_param("~aruco_tf_name", "aruco")
+        self.ARUCO_DICT_NAME = self.get_parameter("aruco_dict").get_parameter_value().string_value
+        self.ARUCO_SIZE = self.get_parameter("aruco_size").get_parameter_value().string_value
+        self.ARUCO_TF_NAME = self.get_parameter("aruco_tf_name").get_parameter_value().string_value
 
-        self.PUB_ARUCO_POSE = load_param("~pub_aruco_pose", "aruco_pose")
+        self.PUB_ARUCO_POSE = self.get_parameter("pub_aruco_pose").get_parameter_value().string_value
 
         ## Aruco
 
@@ -56,31 +57,31 @@ class aruco_detect:
 
         ## TF2
 
-        self.br = tf2_ros.TransformBroadcaster()
+        self.br = tf2_ros.TransformBroadcaster(self)
 
         ## Publishers
 
-        self.pub_aruco_pose = rospy.Publisher(self.PUB_ARUCO_POSE, Marker, queue_size=5)
-        rospy.loginfo(self.PUB_ARUCO_POSE)
+        self.pub_aruco_pose = self.create_publisher(Marker, self.PUB_ARUCO_POSE, 5)
+        self.get_logger().info(f"Publishing to: {self.PUB_ARUCO_POSE}")
 
         ## Subscribers
 
-        ts = mf.TimeSynchronizer(
+        self.ts = TimeSynchronizer(
             [
-                mf.Subscriber(self.SUB_IMAGE, Image),
-                mf.Subscriber(self.SUB_CAMERA_INFO, CameraInfo),
+                Subscriber(self, Image, self.SUB_IMAGE),
+                Subscriber(self, CameraInfo, self.SUB_CAMERA_INFO),
             ],
             queue_size=1,
         )
-        ts.registerCallback(self.callback)
-        rospy.loginfo(self.SUB_IMAGE)
+        self.ts.registerCallback(self.callback)
+        self.get_logger().info(f"Subscribing to: {self.SUB_IMAGE}")
 
     def run(self):
-        rospy.spin()
+        rclpy.spin(self)
 
     def callback(self, image, camera_info):
         # convert to grayscale
-        gray = bridge.imgmsg_to_cv2(image, "mono8")
+        gray = self.bridge.imgmsg_to_cv2(image, "mono8")
 
         corners, ids, _ = aruco.detectMarkers(gray, self.aruco_dict)
 
@@ -126,11 +127,20 @@ class aruco_detect:
             self.pub_aruco_pose.publish(marker)
 
 
-if __name__ == "__main__":
-    ##  Global resources  ##
-
-    bridge = CvBridge()
-
+def main():
     ##  Start node  ##
 
-    aruco_detect().run()
+    rclpy.init()
+    node = ArucoDetect()
+    
+    try:
+        node.run()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == "__main__":
+    main()

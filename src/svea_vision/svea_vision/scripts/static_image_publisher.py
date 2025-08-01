@@ -1,30 +1,21 @@
-#! /usr/bin/env python3
-
-__author__ = "Sulthan Suresh Fazeela"
-__email__ = "sultha@kth.se"
-__license__ = "MIT"
-
 import os
 import cv2
 import random
 
-import rospy
+import rclpy
+from rclpy.node import Node
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
 
-def load_param(name, value=None):
-    if value is None:
-        assert rospy.has_param(name), f'Missing parameter "{name}"'
-    return rospy.get_param(name, value)
 
-class PublishImage:
+class PublishImage(Node):
     """
-    This class is a ROS node that publishes an image or a set of images to a topic at a specified rate. The image(s) can be specified as a single image path or a directory of images.
+    This class is a ROS2 node that publishes an image or a set of images to a topic at a specified rate. The image(s) can be specified as a single image path or a directory of images.
     
     Parameters:
-        - ~image_topic (str): The topic name to publish the image(s) to. Default: 'static_image'
-        - ~image_path (str): The path to a single image or a directory of images.
-        - ~rate (int): The rate at which to publish the image(s). Default: 30 Hz
+        - image_topic (str): The topic name to publish the image(s) to. Default: 'static_image'
+        - image_path (str): The path to a single image or a directory of images.
+        - rate (int): The rate at which to publish the image(s). Default: 30 Hz
         
     Subscribed Topics:
         - None
@@ -34,29 +25,32 @@ class PublishImage:
     """
 
     def __init__(self):
+        super().__init__('static_image_publisher')
+        
         try:
-            # Initialize node
-            rospy.init_node('static_image_publisher', anonymous=True)
-            
             # Parameters
-            self.image_topic = load_param('~image_topic', 'static_image')
-            self.image_path = load_param('~image_path') # Path to a single image or a directory of images
-            self.rate = load_param('~rate', 30)
+            self.declare_parameter('image_topic', 'static_image')
+            self.declare_parameter('image_path', '')
+            self.declare_parameter('rate', 30)
+            
+            self.image_topic = self.get_parameter('image_topic').get_parameter_value().string_value
+            self.image_path = self.get_parameter('image_path').get_parameter_value().string_value
+            self.rate = self.get_parameter('rate').get_parameter_value().integer_value
 
             # CV Bridge
             self.cv_bridge = CvBridge()
 
             # Publisher
-            self.img_pub = rospy.Publisher(self.image_topic, Image, queue_size=1)
+            self.img_pub = self.create_publisher(Image, self.image_topic, 1)
 
         except Exception as e:
             # Log error
-            rospy.logfatal("{}: {}".format(rospy.get_name(), e))
-            rospy.signal_shutdown("Initialization failed: {}".format(e))            
+            self.get_logger().fatal(f"{self.get_name()}: {e}")
+            return
 
         else:
             # Log status
-            rospy.loginfo('{} node initialized.'.format(rospy.get_name()))
+            self.get_logger().info(f'{self.get_name()} node initialized.')
 
     def run(self):
         # Check if image path is a directory
@@ -73,18 +67,27 @@ class PublishImage:
         img_msgs = [self.cv_bridge.cv2_to_imgmsg(img, encoding='bgr8') for img in imgs]
 
         # Publish and sleep loop
-        rate = rospy.Rate(self.rate)
-        try:
-            while not rospy.is_shutdown():
-                # Publish a random image
-                self.img_pub.publish(img_msgs[random.randint(0, len(img_msgs)-1)])
-                rate.sleep()
+        timer_period = 1.0 / self.rate  # seconds
+        self.timer = self.create_timer(timer_period, lambda: self.timer_callback(img_msgs))
 
-        # Exit gracefully
-        except rospy.ROSInterruptException:
-            rospy.loginfo('Shutting down {}'.format(rospy.get_name()))
+    def timer_callback(self, img_msgs):
+        # Publish a random image
+        self.img_pub.publish(img_msgs[random.randint(0, len(img_msgs)-1)])
+
+
+def main():
+    rclpy.init()
+    node = PublishImage()
+    
+    try:
+        node.run()
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
 
 
 if __name__ == "__main__":
-    node = PublishImage()
-    node.run()
+    main()

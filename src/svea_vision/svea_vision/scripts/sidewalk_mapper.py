@@ -4,7 +4,8 @@ __author__ = "Sulthan Suresh Fazeela"
 __email__ = "sultha@kth.se"
 __license__ = "MIT"
 
-import rospy
+import rclpy
+from rclpy.node import Node
 import tf2_ros
 import tf.transformations as tr
 import message_filters as mf
@@ -20,10 +21,9 @@ np.float = float    # NOTE: Temporary fix for ros_numpy issue; check #39
 import ros_numpy
 
 
-def load_param(name, value=None):
-    if value is None:
-        assert rospy.has_param(name), f'Missing parameter "{name}"'
-    return rospy.get_param(name, value)
+def load_param(node, name, default_value=None):
+    node.declare_parameter(name, default_value)
+    return node.get_parameter(name).get_parameter_value()
 
 def transform_pointcloud(pointcloud, transform):
     rotation_matrix = tr.quaternion_matrix([transform.rotation.x, transform.rotation.y, transform.rotation.z, transform.rotation.w])[:3, :3]
@@ -32,7 +32,7 @@ def transform_pointcloud(pointcloud, transform):
     return pointcloud
 
 
-class SidewalkMapper:
+class SidewalkMapper(Node):
     """
     SidewalkMapper class is a ROS node that subscribes to a pointcloud topic, the corresponding sidewalk mask topic, and the filtered pose topic to create an occupancy grid of the sidewalk.
     Important NOTE: The filtered pose topic should be the pose of the frame in which the pointcloud is published.
@@ -70,45 +70,47 @@ class SidewalkMapper:
     def __init__(self):
         try:
             # Initialize node
-            rospy.init_node('sidewalk_mapper')
+            super().__init__('sidewalk_mapper')
             
             # Topic parameters
-            self.pointcloud_topic = load_param('~pointcloud_topic', 'pointcloud')
-            self.sidewalk_mask_topic = load_param('~sidewalk_mask_topic', 'sidewalk_mask')
-            self.sidewalk_occupancy_grid_topic = load_param('~sidewalk_occupancy_grid_topic', 'sidewalk_occupancy_grid')
-            self.filtered_pose_topic = load_param('~filtered_pose_topic', 'filtered_pose')
+            self.pointcloud_topic = load_param(self, 'pointcloud_topic', 'pointcloud').string_value
+            self.sidewalk_mask_topic = load_param(self, 'sidewalk_mask_topic', 'sidewalk_mask').string_value
+            self.sidewalk_occupancy_grid_topic = load_param(self, 'sidewalk_occupancy_grid_topic', 'sidewalk_occupancy_grid').string_value
+            self.filtered_pose_topic = load_param(self, 'filtered_pose_topic', 'filtered_pose').string_value
             
             # Sidewalk parameters
-            self.sidewalk_z_min = load_param('~sidewalk_z_min', -0.5)
-            self.sidewalk_z_max = load_param('~sidewalk_z_max', 0.5)
-            self.non_sidewalk_z_min = load_param('~non_sidewalk_z_min', -1.0)
-            self.non_sidewalk_z_max = load_param('~non_sidewalk_z_max', 1.0)
+            self.sidewalk_z_min = load_param(self, 'sidewalk_z_min', -0.5).double_value
+            self.sidewalk_z_max = load_param(self, 'sidewalk_z_max', 0.5).double_value
+            self.non_sidewalk_z_min = load_param(self, 'non_sidewalk_z_min', -1.0).double_value
+            self.non_sidewalk_z_max = load_param(self, 'non_sidewalk_z_max', 1.0).double_value
             
             # Occupancy grid parameters
-            self.world_frame = load_param('~world_frame', 'map')
-            self.base_frame = load_param('~base_frame', 'base_link')
-            self.resolution = load_param('~resolution', 0.05)
-            self.width = load_param('~width', 50)      # Width is along x-axis in ROS OccupancyGrid
-            self.height = load_param('~height', 50)     # Height is along y-axis in ROS OccupancyGrid
-            self.occupied_value = load_param('~occupied_value', 100)
-            self.free_value = load_param('~free_value', 0)
-            self.unknown_value = load_param('~unknown_value', -1)
-            self.gird_origin = load_param('~grid_origin', "center")    # "center" or "bottom"
+            self.world_frame = load_param(self, 'world_frame', 'map').string_value
+            self.base_frame = load_param(self, 'base_frame', 'base_link').string_value
+            self.resolution = load_param(self, 'resolution', 0.05).double_value
+            self.width = load_param(self, 'width', 50).double_value      # Width is along x-axis in ROS OccupancyGrid
+            self.height = load_param(self, 'height', 50).double_value     # Height is along y-axis in ROS OccupancyGrid
+            self.occupied_value = load_param(self, 'occupied_value', 100).integer_value
+            self.free_value = load_param(self, 'free_value', 0).integer_value
+            self.unknown_value = load_param(self, 'unknown_value', -1).integer_value
+            self.gird_origin = load_param(self, 'grid_origin', "center").string_value    # "center" or "bottom"
             
             # Other parameters
-            self.pointcloud_max_distance = load_param('~pointcloud_max_distance', 7.5)
-            self.verbose = load_param('~verbose', False)
+            self.pointcloud_max_distance = load_param(self, 'pointcloud_max_distance', 7.5).double_value
+            self.verbose = load_param(self, 'verbose', False).bool_value
             
             # Check parameters sanity
             if not self.world_frame:
-                raise Exception('world_frame parameter not set. Exiting...'.format(rospy.get_name()))
+                raise Exception('world_frame parameter not set. Exiting...')
             if not self.base_frame:
-                raise Exception('base_frame parameter not set. Exiting...'.format(rospy.get_name()))
+                raise Exception('base_frame parameter not set. Exiting...')
             
             # TF2
             self.tf_buf = tf2_ros.Buffer()
-            self.tf_listener = tf2_ros.TransformListener(self.tf_buf)
-            rospy.sleep(1.0)        # Sleep for 1 sec for tf2 to populate the buffer
+            self.tf_listener = tf2_ros.TransformListener(self.tf_buf, self)
+            # Sleep for 1 sec for tf2 to populate the buffer
+            import time
+            time.sleep(1.0)
             
             # Initialize occupancy grid message
             self.sidewalk_occupancy_grid = OccupancyGrid()
@@ -122,7 +124,7 @@ class SidewalkMapper:
                 self.sidewalk_occupancy_grid.info.origin.position.y = -self.height/2
             else:
                 if self.gird_origin != "center":
-                    rospy.logwarn("{}: Invalid grid_origin parameter, defaulting to center".format(rospy.get_name()))
+                    self.get_logger().warn("Invalid grid_origin parameter, defaulting to center")
                 # Set world point (0, 0) to be the center of the grid
                 self.sidewalk_occupancy_grid.info.origin.position.x = -self.width/2
                 self.sidewalk_occupancy_grid.info.origin.position.y = -self.height/2                
@@ -131,7 +133,7 @@ class SidewalkMapper:
             self.grid_data = np.full((self.sidewalk_occupancy_grid.info.width, self.sidewalk_occupancy_grid.info.height, 2), (self.unknown_value, 0), dtype=float)  # (x,y) => (probability, no. of observations)
             
             # Publishers
-            self.sidewalk_occupancy_grid_pub = rospy.Publisher(self.sidewalk_occupancy_grid_topic, OccupancyGrid, queue_size=1)
+            self.sidewalk_occupancy_grid_pub = self.create_publisher(OccupancyGrid, self.sidewalk_occupancy_grid_topic, 1)
             
             # Subscribers
             self.ts = mf.TimeSynchronizer([
@@ -143,18 +145,15 @@ class SidewalkMapper:
             
         except Exception as e:
             # Log error
-            rospy.logfatal("{}: {}".format(rospy.get_name(), e))
-            rospy.signal_shutdown("Initialization failed: {}".format(e))
+            self.get_logger().fatal(f"Initialization failed: {e}")
+            raise e
 
         else:
             # Log status
-            rospy.loginfo("{}: Initialized successfully".format(rospy.get_name()))
+            self.get_logger().info("Initialized successfully")
             
     def run(self):
-        try:
-            rospy.spin()
-        except rospy.ROSInterruptException:
-            rospy.loginfo("{}: ROS Interrupted, shutting down...".format(rospy.get_name()))
+        pass  # ROS2 spinning handled by main function
             
     def callback(self, pointcloud_msg, sidewalk_mask_msg, filtered_pose_msg):
         callback_start = time.time()
@@ -191,7 +190,7 @@ class SidewalkMapper:
         
         # Log
         if self.verbose:
-            rospy.loginfo("Callback time: {:.3f} s, Convert time: {:.3f} s, Update grid time: {:.3f} s, Publish time: {:.3f} s".format(publish_time - callback_start, convert_time - callback_start, update_grid_time - convert_time, publish_time - update_grid_time))
+            self.get_logger().info("Callback time: {:.3f} s, Convert time: {:.3f} s, Update grid time: {:.3f} s, Publish time: {:.3f} s".format(publish_time - callback_start, convert_time - callback_start, update_grid_time - convert_time, publish_time - update_grid_time))
 
     def update_grid(self, pointcloud_data, sidewalk_mask, transform):
         # Separate sidewalk and non-sidewalk points
@@ -276,6 +275,17 @@ class SidewalkMapper:
                     grid_data[i, j] = (new_prob, n + 1)
                 
     
-if __name__ == '__main__':
+def main(args=None):
+    rclpy.init(args=args)
     node = SidewalkMapper()
-    node.run()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()

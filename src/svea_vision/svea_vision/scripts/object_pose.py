@@ -2,7 +2,9 @@
 
 import numpy as np
 
-import rospy
+import rclpy
+from rclpy.node import Node
+from rclpy.time import Time
 import tf2_ros
 import message_filters as mf
 from std_msgs.msg import ColorRGBA
@@ -15,10 +17,9 @@ from svea_vision_msgs.msg import StampedObjectArray, StampedObjectPoseArray, Obj
 from tf2_geometry_msgs import do_transform_point
 
 
-def load_param(name, value=None):
-    if value is None:
-        assert rospy.has_param(name), f'Missing parameter "{name}"'
-    return rospy.get_param(name, value)
+def load_param(node, name, default_value=None):
+    node.declare_parameter(name, default_value)
+    return node.get_parameter(name).get_parameter_value()
 
 
 def replace_base(old, new):
@@ -31,23 +32,21 @@ def replace_base(old, new):
     return "/".join(ns)
 
 
-class object_pose:
+class object_pose(Node):
     def __init__(self):
         ## Initialize node
-
-        rospy.init_node("object_pose")
+        super().__init__("object_pose")
 
         ## Parameters
+        self.SUB_OBJECTS = load_param(self, "sub_objects", "objects").string_value
 
-        self.SUB_OBJECTS = load_param("~sub_objects", "objects")
-
-        self.SUB_DEPTH_IMAGE = load_param("~sub_depth_image", "depth_image")
+        self.SUB_DEPTH_IMAGE = load_param(self, "sub_depth_image", "depth_image").string_value
         self.SUB_CAMERA_INFO = replace_base(self.SUB_DEPTH_IMAGE, "camera_info")
 
-        self.PUB_OBJECTPOSES = load_param("~pub_objectposes", "objectposes")
-        self.PUB_OBJECTMARKERS = load_param("~pub_objectmarkers", "objectmarkers")
+        self.PUB_OBJECTPOSES = load_param(self, "pub_objectposes", "objectposes").string_value
+        self.PUB_OBJECTMARKERS = load_param(self, "pub_objectmarkers", "objectmarkers").string_value
 
-        self.FRAME_ID = load_param("~frame_id", "map")
+        self.FRAME_ID = load_param(self, "frame_id", "map").string_value
 
         ## Camera model
 
@@ -56,17 +55,17 @@ class object_pose:
         ## TF
 
         self.tf_buf = tf2_ros.Buffer()
-        self.tf_listener = tf2_ros.TransformListener(self.tf_buf)
+        self.tf_listener = tf2_ros.TransformListener(self.tf_buf, self)
 
         ## Publishers
 
-        self.pub_objectposes = rospy.Publisher(
-            self.PUB_OBJECTPOSES, StampedObjectPoseArray, queue_size=10
+        self.pub_objectposes = self.create_publisher(
+            StampedObjectPoseArray, self.PUB_OBJECTPOSES, 10
         )
-        rospy.loginfo(self.PUB_OBJECTPOSES)
+        self.get_logger().info(self.PUB_OBJECTPOSES)
 
-        self.pub_objectmarkers = rospy.Publisher(
-            self.PUB_OBJECTMARKERS, Marker, queue_size=10
+        self.pub_objectmarkers = self.create_publisher(
+            Marker, self.PUB_OBJECTMARKERS, 10
         )
 
         ## Subscribers
@@ -81,11 +80,11 @@ class object_pose:
         )
         self.ts.registerCallback(self.callback)
 
-        rospy.loginfo(self.SUB_OBJECTS)
-        rospy.loginfo(self.SUB_DEPTH_IMAGE)
+        self.get_logger().info(self.SUB_OBJECTS)
+        self.get_logger().info(self.SUB_DEPTH_IMAGE)
 
     def run(self):
-        rospy.spin()
+        pass  # ROS2 spinning will be handled by main function
 
     def callback(self, object_array, image, camera_info):
         ## Load camera info
@@ -161,10 +160,10 @@ class object_pose:
             ps.point.z = z
 
             # Create point in map frame
-            if not self.tf_buf.can_transform(self.FRAME_ID, ps.header.frame_id, rospy.Time(0)):
-                rospy.loginfo('Cannot do transform for objects from "%s" to target_frame "%s"', ps.header.frame_id, self.FRAME_ID)
+            if not self.tf_buf.can_transform(self.FRAME_ID, ps.header.frame_id, Time()):
+                self.get_logger().info('Cannot do transform for objects from "%s" to target_frame "%s"' % (ps.header.frame_id, self.FRAME_ID))
                 return
-            trans = self.tf_buf.lookup_transform(self.FRAME_ID, ps.header.frame_id, rospy.Time(0))
+            trans = self.tf_buf.lookup_transform(self.FRAME_ID, ps.header.frame_id, Time())
             ps = do_transform_point(ps, trans)
 
             objpose = ObjectPose()
@@ -211,7 +210,17 @@ class object_pose:
         self.pub_objectmarkers.publish(marker)
 
 
-if __name__ == "__main__":
-    ##  Start node  ##
+def main(args=None):
+    rclpy.init(args=args)
+    node = object_pose()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
 
-    object_pose().run()
+
+if __name__ == "__main__":
+    main()

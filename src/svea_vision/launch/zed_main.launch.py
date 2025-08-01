@@ -1,112 +1,169 @@
-<?xml version="1.0"?>
-<launch>
+#!/usr/bin/env python3
 
-    <!-- Options -->
-    <arg name="camera_name"                     default="zed"/>
-    <arg name="camera_model"                    default="zed"/>
-    <arg name="use_cuda"                        default="true"/>
-    <arg name="enable_bbox_image"               default="false"/>
-    <arg name="enable_aruco"                    default="false"/>
-    <arg name="enable_state_estimation"         default="true"/>
-    <arg name="frame_id"                        default="map"/>
-    <arg name="enable_sidewalk_segmentation"    default="false"/>
-    <arg name="sidewalk_frame_id"               default=""/>
-    <arg name="sidewalk_prompt_type"            default="bbox"/>
-    <arg name="sidewalk_prompt_text"            default="a sidewalk or footpath or walkway or paved path"/>
-    <arg name="sidewalk_owl_roi"                default="[0.25, 0.50, 0.75, 0.95]"/>
-    <arg name="verbose"                         default="false"/>
-
-    <!-- Camera pose -->
-    <arg name="zed_base_frame"      default="base_link"/>
-    <arg name="zed_cam_pos_x"       default="0.0"/>
-    <arg name="zed_cam_pos_y"       default="0.0"/>
-    <arg name="zed_cam_pos_z"       default="0.0"/>
-    <arg name="zed_cam_roll"        default="0.0"/>
-    <arg name="zed_cam_pitch"       default="0.0"/>
-    <arg name="zed_cam_yaw"         default="0.0"/>
-
-    <!-- Auxiliary -->
-    <arg name="only_objects"        default=""/>
-    <arg name="skip_objects"        default=""/>
-    <arg name="max_age"             default="30"/>
-    <arg name="aruco_size"          default="0.1"/>
-
-    <!-- pedestrian state estimation constants -->
-    <arg name="max_time_missing"             default="1"/>
-    <arg name="vel_filter_window"            default="15"/>
-    <arg name="discard_id_threshold"         default="0.5"/>
+from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, GroupAction
+from launch.conditions import IfCondition, UnlessCondition
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, TextSubstitution
+from launch_ros.actions import Node, SetParameter
+from launch_ros.substitutions import FindPackageShare
 
 
-    <!-- Constants -->
-    <arg name="depth_image"     value="/zed/zed_node/depth/depth_registered"/>
-    <arg name="image"           value="/zed/zed_node/rgb/image_rect_color"/>
-    <arg name="point_cloud"     value="/zed/zed_node/point_cloud/cloud_registered"/>
+def generate_launch_description():
+    return LaunchDescription([
+        # Declare launch arguments - Options
+        DeclareLaunchArgument('camera_name', default_value='zed', description='Camera name'),
+        DeclareLaunchArgument('camera_model', default_value='zed', description='Camera model'),
+        DeclareLaunchArgument('use_cuda', default_value='true', description='Use CUDA'),
+        DeclareLaunchArgument('enable_bbox_image', default_value='false', description='Enable bbox image'),
+        DeclareLaunchArgument('enable_aruco', default_value='false', description='Enable ArUco detection'),
+        DeclareLaunchArgument('enable_state_estimation', default_value='true', description='Enable state estimation'),
+        DeclareLaunchArgument('frame_id', default_value='map', description='Frame ID'),
+        DeclareLaunchArgument('enable_sidewalk_segmentation', default_value='false', description='Enable sidewalk segmentation'),
+        DeclareLaunchArgument('sidewalk_frame_id', default_value='', description='Sidewalk frame ID'),
+        DeclareLaunchArgument('sidewalk_prompt_type', default_value='bbox', description='Sidewalk prompt type'),
+        DeclareLaunchArgument('sidewalk_prompt_text', default_value='a sidewalk or footpath or walkway or paved path', description='Sidewalk prompt text'),
+        DeclareLaunchArgument('sidewalk_owl_roi', default_value='[0.25, 0.50, 0.75, 0.95]', description='Sidewalk OWL ROI'),
+        DeclareLaunchArgument('verbose', default_value='false', description='Verbose output'),
 
-    <arg name="map_path" default=""/>
-    <node if="$(eval map_path != '')" pkg="map_server" name="map_server" type="map_server" args="$(arg map_path)"/>
+        # Camera pose parameters
+        DeclareLaunchArgument('zed_base_frame', default_value='base_link', description='ZED base frame'),
+        DeclareLaunchArgument('zed_cam_pos_x', default_value='0.0', description='ZED camera X position'),
+        DeclareLaunchArgument('zed_cam_pos_y', default_value='0.0', description='ZED camera Y position'),
+        DeclareLaunchArgument('zed_cam_pos_z', default_value='0.0', description='ZED camera Z position'),
+        DeclareLaunchArgument('zed_cam_roll', default_value='0.0', description='ZED camera roll'),
+        DeclareLaunchArgument('zed_cam_pitch', default_value='0.0', description='ZED camera pitch'),
+        DeclareLaunchArgument('zed_cam_yaw', default_value='0.0', description='ZED camera yaw'),
 
-    <!-- Nodes -->
-    <group ns="$(arg camera_name)">
-        <include file="$(find zed_wrapper)/launch/zed_no_tf.launch">
-            <arg name="camera_name"     value="$(arg camera_name)"/>
-            <arg name="camera_model"    value="$(arg camera_model)"/>
-            <arg name="base_frame"      value="$(arg zed_base_frame)"/>
-            <arg name="cam_pos_x"       value="$(arg zed_cam_pos_x)"/>
-            <arg name="cam_pos_y"       value="$(arg zed_cam_pos_y)"/>
-            <arg name="cam_pos_z"       value="$(arg zed_cam_pos_z)"/>
-            <arg name="cam_roll"        value="$(arg zed_cam_roll)"/>
-            <arg name="cam_pitch"       value="$(arg zed_cam_pitch)"/>
-            <arg name="cam_yaw"         value="$(arg zed_cam_yaw)"/>
-        </include>
-    </group>
+        # Auxiliary parameters
+        DeclareLaunchArgument('only_objects', default_value='', description='Only detect specified objects'),
+        DeclareLaunchArgument('skip_objects', default_value='', description='Skip specified objects'),
+        DeclareLaunchArgument('max_age', default_value='30', description='Maximum tracking age'),
+        DeclareLaunchArgument('aruco_size', default_value='0.1', description='ArUco marker size'),
 
-    <include file="$(find svea_vision)/launch/object_pose.launch">
-        <!-- Options -->
-        <arg name="use_cuda"            value="$(arg use_cuda)"/>
-        <arg name="enable_bbox_image"   value="$(arg enable_bbox_image)"/>
-        <arg name="frame_id"            value="$(arg frame_id)"/>
-        <!-- Consumed topics -->
-        <arg name="image"               value="$(arg image)"/>
-        <arg name="depth_image"         value="$(arg depth_image)"/>
-        <!-- Auxiliary -->
-        <arg name="only_objects"        value="$(arg only_objects)"/>
-        <arg name="skip_objects"        value="$(arg skip_objects)"/>
-        <arg name="max_age"             value="$(arg max_age)"/>
-    </include>
+        # Pedestrian state estimation constants
+        DeclareLaunchArgument('max_time_missing', default_value='1', description='Max time missing for pedestrian tracking'),
+        DeclareLaunchArgument('vel_filter_window', default_value='15', description='Velocity filter window'),
+        DeclareLaunchArgument('discard_id_threshold', default_value='0.5', description='Discard ID threshold'),
 
-    <include if="$(arg enable_aruco)" file="$(find svea_vision)/launch/aruco_detect.launch">
-        <!-- Consumed topics -->
-        <arg name="image"       value="$(arg image)"/>
-        <!-- Auxiliary -->
-        <arg name="aruco_size"  value="$(arg aruco_size)"/>
-    </include>
+        # Constants (topics)
+        DeclareLaunchArgument('depth_image', default_value='/zed/zed_node/depth/depth_registered', description='Depth image topic'),
+        DeclareLaunchArgument('image', default_value='/zed/zed_node/rgb/image_rect_color', description='RGB image topic'),
+        DeclareLaunchArgument('point_cloud', default_value='/zed/zed_node/point_cloud/cloud_registered', description='Point cloud topic'),
+        DeclareLaunchArgument('map_path', default_value='', description='Map file path'),
 
-    <group if="$(arg enable_state_estimation)">
-        <node name="detection_splitter" pkg="svea_vision" type="detection_splitter.py" output="screen" ></node>
-        <node name="person_state_estimation" pkg="svea_vision" type="person_state_estimation.py" output="screen"/> 
-        <node name="pedestrian_flow_estimate" pkg="svea_vision" type="pedestrian_flow_estimate.py" output="screen">
-            <param name="persons_topic"             value="/detection_splitter/persons"/>
-            <param name="max_time_missing"           value="$(arg max_time_missing)"/>
-            <param name="vel_filter_window"          value="$(arg vel_filter_window)"/>
-            <param name="discard_id_threshold"       value="$(arg discard_id_threshold)"/>
-        </node>
-    </group>
+        # Conditional map server (commented out - needs map_server package)
+        # Node(
+        #     condition=IfCondition(LaunchConfiguration('map_path')),
+        #     package='nav2_map_server',
+        #     executable='map_server',
+        #     name='map_server',
+        #     parameters=[{'yaml_filename': LaunchConfiguration('map_path')}]
+        # ),
 
-    <include if="$(arg enable_sidewalk_segmentation)" file="$(find svea_vision)/launch/sidewalk_segmentation.launch">
-        <!-- Options -->
-        <arg name="use_cuda"                    value="$(arg use_cuda)"/>
-        <arg name="frame_id"                    value="$(arg sidewalk_frame_id)"/>
-        <arg name="prompt_type"                 value="$(arg sidewalk_prompt_type)"/>
-        <arg name="prompt_text"                 value="$(arg sidewalk_prompt_text)"/>
-        <arg name="owl_roi"                     value="$(arg sidewalk_owl_roi)"/>
-        <arg name="verbose"                     value="$(arg verbose)"/>
-        <!-- Consumed topics -->
-        <arg name="rgb_topic"                   value="$(arg image)"/>
-        <arg name="pointcloud_topic"            value="$(arg point_cloud)"/>
-        <!-- Produced topics -->
-        <arg name="sidewalk_mask_topic"         value="sidewalk_mask"/>
-        <arg name="sidewalk_image_topic"        value="sidewalk_image"/>
-        <arg name="sidewalk_pointcloud_topic"   value="sidewalk_pointcloud"/>
-    </include>
+        # ZED Camera wrapper (commented out - needs zed_wrapper package for ROS2)
+        # Note: This would need to be replaced with the ROS2 version of zed_wrapper
+        # GroupAction([
+        #     IncludeLaunchDescription(
+        #         PathJoinSubstitution([
+        #             FindPackageShare('zed_wrapper'),
+        #             'launch',
+        #             'zed_no_tf.launch.py'
+        #         ]),
+        #         launch_arguments={
+        #             'camera_name': LaunchConfiguration('camera_name'),
+        #             'camera_model': LaunchConfiguration('camera_model'),
+        #             'base_frame': LaunchConfiguration('zed_base_frame'),
+        #             'cam_pos_x': LaunchConfiguration('zed_cam_pos_x'),
+        #             'cam_pos_y': LaunchConfiguration('zed_cam_pos_y'),
+        #             'cam_pos_z': LaunchConfiguration('zed_cam_pos_z'),
+        #             'cam_roll': LaunchConfiguration('zed_cam_roll'),
+        #             'cam_pitch': LaunchConfiguration('zed_cam_pitch'),
+        #             'cam_yaw': LaunchConfiguration('zed_cam_yaw'),
+        #         }.items()
+        #     )
+        # ], scoped=True),
 
-</launch>
+        # Include object_pose launch
+        IncludeLaunchDescription(
+            PathJoinSubstitution([
+                FindPackageShare('svea_vision'),
+                'launch',
+                'object_pose.launch.py'
+            ]),
+            launch_arguments={
+                'use_cuda': LaunchConfiguration('use_cuda'),
+                'enable_bbox_image': LaunchConfiguration('enable_bbox_image'),
+                'frame_id': LaunchConfiguration('frame_id'),
+                'image': LaunchConfiguration('image'),
+                'depth_image': LaunchConfiguration('depth_image'),
+                'only_objects': LaunchConfiguration('only_objects'),
+                'skip_objects': LaunchConfiguration('skip_objects'),
+                'max_age': LaunchConfiguration('max_age'),
+            }.items()
+        ),
+
+        # Include aruco_detect launch (conditional)
+        IncludeLaunchDescription(
+            PathJoinSubstitution([
+                FindPackageShare('svea_vision'),
+                'launch',
+                'aruco_detect.launch.py'
+            ]),
+            launch_arguments={
+                'image': LaunchConfiguration('image'),
+                'aruco_size': LaunchConfiguration('aruco_size'),
+            }.items(),
+            condition=IfCondition(LaunchConfiguration('enable_aruco'))
+        ),
+
+        # State estimation nodes (conditional group)
+        GroupAction([
+            Node(
+                package='svea_vision',
+                executable='detection_splitter',
+                name='detection_splitter',
+                output='screen'
+            ),
+            Node(
+                package='svea_vision',
+                executable='person_state_estimation',
+                name='person_state_estimation',
+                output='screen'
+            ),
+            Node(
+                package='svea_vision',
+                executable='pedestrian_flow_estimate',
+                name='pedestrian_flow_estimate',
+                output='screen',
+                parameters=[{
+                    'persons_topic': '/detection_splitter/persons',
+                    'max_time_missing': LaunchConfiguration('max_time_missing'),
+                    'vel_filter_window': LaunchConfiguration('vel_filter_window'),
+                    'discard_id_threshold': LaunchConfiguration('discard_id_threshold'),
+                }]
+            )
+        ], condition=IfCondition(LaunchConfiguration('enable_state_estimation'))),
+
+        # Include sidewalk_segmentation launch (conditional)
+        IncludeLaunchDescription(
+            PathJoinSubstitution([
+                FindPackageShare('svea_vision'),
+                'launch',
+                'sidewalk_segmentation.launch.py'
+            ]),
+            launch_arguments={
+                'use_cuda': LaunchConfiguration('use_cuda'),
+                'frame_id': LaunchConfiguration('sidewalk_frame_id'),
+                'prompt_type': LaunchConfiguration('sidewalk_prompt_type'),
+                'prompt_text': LaunchConfiguration('sidewalk_prompt_text'),
+                'owl_roi': LaunchConfiguration('sidewalk_owl_roi'),
+                'verbose': LaunchConfiguration('verbose'),
+                'rgb_topic': LaunchConfiguration('image'),
+                'pointcloud_topic': LaunchConfiguration('point_cloud'),
+                'sidewalk_mask_topic': 'sidewalk_mask',
+                'sidewalk_image_topic': 'sidewalk_image',
+                'sidewalk_pointcloud_topic': 'sidewalk_pointcloud',
+            }.items(),
+            condition=IfCondition(LaunchConfiguration('enable_sidewalk_segmentation'))
+        )
+    ])

@@ -1,23 +1,24 @@
 #! /usr/bin/env python3
 
-import rospy
+import rclpy
+from rclpy.node import Node
 from svea_vision_msgs.msg import StampedObjectPoseArray
 
 
-class DataSplitting:
+class DataSplitting(Node):
     """ This class will split the posed object array into an array 
         with person objects and an array with other objects. These 
         arrays can be accessed using 'DataSplitting.GetPersons()' 
         and 'DataSplitting.GetOther()'"""
 
     def __init__(self):
-        rospy.init_node('detection_splitter', anonymous=True)
-        self.person_pub = rospy.Publisher(
-            "~persons", StampedObjectPoseArray, queue_size=10)
-        self.vehicle_pub = rospy.Publisher(
-            "~vehicles", StampedObjectPoseArray, queue_size=10)
-        self.other_pub = rospy.Publisher(
-            "~other", StampedObjectPoseArray, queue_size=10)
+        super().__init__('detection_splitter')
+        self.person_pub = self.create_publisher(
+            StampedObjectPoseArray, "~/persons", 10)
+        self.vehicle_pub = self.create_publisher(
+            StampedObjectPoseArray, "~/vehicles", 10)
+        self.other_pub = self.create_publisher(
+            StampedObjectPoseArray, "~/other", 10)
         self.persons = []
         self.vehicles = []
         self.other = []
@@ -54,14 +55,26 @@ class DataSplitting:
 
     # This initialises a node that listens to the topic where the object poses are published to
     def __listener(self):
-        rospy.Subscriber("/objectposes",
-                         StampedObjectPoseArray,
-                         self.__split)
+        self.create_subscription(
+            StampedObjectPoseArray,
+            "/objectposes",
+            self.__split,
+            10)
 
         # spin() simply keeps python from exiting until this node is stopped
-        while not rospy.is_shutdown():
-            rospy.spin()
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    splitted_data = DataSplitting()
+    try:
+        rclpy.spin(splitted_data)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        splitted_data.destroy_node()
+        rclpy.shutdown()
 
 
 if __name__ == "__main__":
-    splitted_data = DataSplitting()
+    main()

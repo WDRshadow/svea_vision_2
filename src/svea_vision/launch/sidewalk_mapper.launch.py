@@ -1,54 +1,61 @@
-<?xml version="1.0"?>
+#!/usr/bin/env python3
 
-<launch>
+from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
+from launch_ros.actions import Node
 
-    <!-- Occupancy Grid Parameters -->
-    <arg name="world_frame"     default="map"/>
-    <arg name="base_frame"      default="base_link"/>
-    <arg name="resolution"      default="0.05"/>
-    <arg name="width"           default="50"/>
-    <arg name="height"          default="50"/>
-    <arg name="grid_origin"     default="bottom"/> <!-- "center" or "bottom" -->
 
-    <!-- Sidewalk parameters -->
-    <arg name="sidewalk_z_min"              default="-0.5"/>
-    <arg name="sidewalk_z_max"              default="0.5"/>
-    <arg name="non_sidewalk_z_min"          default="-1.0"/>
-    <arg name="non_sidewalk_z_max"          default="1.0"/>
-    <arg name="pointcloud_max_distance"     default="7.5"/> <!-- Maximum distance to consider points in meters -->
+def generate_launch_description():
+    return LaunchDescription([
+        # Declare launch arguments - Occupancy Grid Parameters
+        DeclareLaunchArgument('world_frame', default_value='map', description='World frame'),
+        DeclareLaunchArgument('base_frame', default_value='base_link', description='Base frame'),
+        DeclareLaunchArgument('resolution', default_value='0.05', description='Grid resolution'),
+        DeclareLaunchArgument('width', default_value='50', description='Grid width'),
+        DeclareLaunchArgument('height', default_value='50', description='Grid height'),
+        DeclareLaunchArgument('grid_origin', default_value='bottom', description='Grid origin: "center" or "bottom"'),
 
-    <!-- Topic parameters -->
-    <arg name="pointcloud_topic"                default="/zed/zed_node/point_cloud/cloud_registered"/>
-    <arg name="sidewalk_mask_topic"             default="sidewalk_mask"/>
-    <arg name="sidewalk_occupancy_grid_topic"   default="sidewalk_occupancy_grid"/>
-    <arg name="filtered_pose_topic"             default="/zed/zed_node/pose"/>
+        # Sidewalk parameters
+        DeclareLaunchArgument('sidewalk_z_min', default_value='-0.5', description='Minimum Z for sidewalk'),
+        DeclareLaunchArgument('sidewalk_z_max', default_value='0.5', description='Maximum Z for sidewalk'),
+        DeclareLaunchArgument('non_sidewalk_z_min', default_value='-1.0', description='Minimum Z for non-sidewalk'),
+        DeclareLaunchArgument('non_sidewalk_z_max', default_value='1.0', description='Maximum Z for non-sidewalk'),
+        DeclareLaunchArgument('pointcloud_max_distance', default_value='7.5', description='Maximum distance to consider points in meters'),
 
-    <arg name="verbose" default="false"/>
+        # Topic parameters
+        DeclareLaunchArgument('pointcloud_topic', default_value='/zed/zed_node/point_cloud/cloud_registered', description='Pointcloud topic'),
+        DeclareLaunchArgument('sidewalk_mask_topic', default_value='sidewalk_mask', description='Sidewalk mask topic'),
+        DeclareLaunchArgument('sidewalk_occupancy_grid_topic', default_value='sidewalk_occupancy_grid', description='Sidewalk occupancy grid topic'),
+        DeclareLaunchArgument('filtered_pose_topic', default_value='/zed/zed_node/pose', description='Filtered pose topic'),
+        DeclareLaunchArgument('verbose', default_value='false', description='Verbose output'),
 
-    <!-- Sidewalk Mapper Node -->
-    <node name="sidewalk_mapper" pkg="svea_vision" type="sidewalk_mapper.py" output="screen">
-        <!-- Occupancy Grid Parameters -->
-        <param name="world_frame"               value="$(arg world_frame)"/>
-        <param name="base_frame"                value="$(arg base_frame)"/>
-        <param name="resolution"                value="$(arg resolution)"/>
-        <param name="width"                     value="$(arg width)"/>
-        <param name="height"                    value="$(arg height)"/>
-        <param name="grid_origin"               value="$(arg grid_origin)"/>
-
-        <!-- Sidewalk parameters -->
-        <param name="sidewalk_z_min"            value="$(arg sidewalk_z_min)"/>
-        <param name="sidewalk_z_max"            value="$(arg sidewalk_z_max)"/>
-        <param name="non_sidewalk_z_min"        value="$(arg non_sidewalk_z_min)"/>
-        <param name="non_sidewalk_z_max"        value="$(arg non_sidewalk_z_max)"/>
-        <param name="pointcloud_max_distance"   value="$(arg pointcloud_max_distance)"/>
-
-        <!-- Topic parameters -->
-        <param name="pointcloud_topic"           value="$(arg pointcloud_topic)"/>
-        <param name="sidewalk_mask_topic"        value="$(arg sidewalk_mask_topic)"/>
-        <param name="sidewalk_occupancy_grid_topic" value="$(arg sidewalk_occupancy_grid_topic)"/>
-        <param name="filtered_pose_topic"        value="$(arg filtered_pose_topic)"/>
-
-        <param name="verbose"                   value="$(arg verbose)"/>
-    </node>
-
-</launch>
+        # Launch the sidewalk_mapper node
+        Node(
+            package='svea_vision',
+            executable='sidewalk_mapper',
+            name='sidewalk_mapper',
+            output='screen',
+            parameters=[{
+                # Occupancy Grid Parameters
+                'world_frame': LaunchConfiguration('world_frame'),
+                'base_frame': LaunchConfiguration('base_frame'),
+                'resolution': LaunchConfiguration('resolution'),
+                'width': LaunchConfiguration('width'),
+                'height': LaunchConfiguration('height'),
+                'grid_origin': LaunchConfiguration('grid_origin'),
+                # Sidewalk parameters
+                'sidewalk_z_min': LaunchConfiguration('sidewalk_z_min'),
+                'sidewalk_z_max': LaunchConfiguration('sidewalk_z_max'),
+                'non_sidewalk_z_min': LaunchConfiguration('non_sidewalk_z_min'),
+                'non_sidewalk_z_max': LaunchConfiguration('non_sidewalk_z_max'),
+                'pointcloud_max_distance': LaunchConfiguration('pointcloud_max_distance'),
+                # Topic parameters
+                'pointcloud_topic': LaunchConfiguration('pointcloud_topic'),
+                'sidewalk_mask_topic': LaunchConfiguration('sidewalk_mask_topic'),
+                'sidewalk_occupancy_grid_topic': LaunchConfiguration('sidewalk_occupancy_grid_topic'),
+                'filtered_pose_topic': LaunchConfiguration('filtered_pose_topic'),
+                'verbose': LaunchConfiguration('verbose'),
+            }]
+        )
+    ])

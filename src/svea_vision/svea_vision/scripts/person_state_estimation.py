@@ -3,7 +3,8 @@
 from collections import deque
 import numpy as np
 from math import sin, cos, atan2
-import rospy
+import rclpy
+from rclpy.node import Node
 from geometry_msgs.msg import Pose, Twist
 from std_msgs.msg import Float64
 from svea_vision_msgs.msg import StampedObjectPoseArray, PersonState, PersonStateArray
@@ -15,7 +16,7 @@ from svea_vision.svea_vision.utils.kalman_filter import KF
 # using a combination of interpolation, Kalman Filter, and curve fitting.
 
 
-class PersonStatePredictor:
+class PersonStatePredictor(Node):
     """Class that estimates the states of each detected object
     (x, y, v, phi) by interpolating the locations up to
     MAX_HISTORY_LEN."""
@@ -31,26 +32,24 @@ class PersonStatePredictor:
     time_deque = deque([0],MAX_HISTORY_LEN)
 
     def __init__(self):
-        rospy.init_node("person_state_estimation", anonymous=True)
+        super().__init__("person_state_estimation")
         self.last_time = None
         self.frequency = 0
         self.counter = 0
         self.total_time = 0
         # Initialize the publisher for Twist messages
-        self.pub_kf = rospy.Publisher("~person_states_kf", PersonStateArray, queue_size=10)
+        self.pub_kf = self.create_publisher(PersonStateArray, "~/person_states_kf", 10)
         self.start()
 
     def __listener(self):
         """Subscribes to the topic containing only detected
         persons and applies the function __callback."""
-        rospy.Subscriber(
-            "/detection_splitter/persons",
+        self.create_subscription(
             StampedObjectPoseArray,
+            "/detection_splitter/persons",
             self.__callback,
+            10
         )
-
-        while not rospy.is_shutdown():
-            rospy.spin()
 
     def __callback(self, msg):
         """This method is a callback function that is triggered when a message is received.
@@ -325,5 +324,17 @@ def rotationMatrixToQuaternion1(m):
     return q
 
 
-if __name__ == "__main__":
+def main(args=None):
+    rclpy.init(args=args)
     predictions = PersonStatePredictor()
+    try:
+        rclpy.spin(predictions)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        predictions.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == "__main__":
+    main()

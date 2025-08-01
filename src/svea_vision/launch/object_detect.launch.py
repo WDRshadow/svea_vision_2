@@ -1,39 +1,40 @@
-<?xml version="1.0"?>
-<launch>
+#!/usr/bin/env python3
 
-    <!-- Options -->
-    <arg name="use_cuda"            default="true"/>
-    <arg name="enable_bbox_image"   default="false" />
-
-    <!-- Consumed topics -->
-    <arg name="image"               default="image"/>
-
-    <!-- Produced topics -->
-    <arg name="objects"             default="objects"/>
-    <arg name="bbox_image"          default="bbox_image"/>
-
-    <!-- Auxiliary -->
-    <arg name="max_age"             default="30"/>
-    <arg name="model_path"          default="yolov8n.pt"/>
-    <arg name="only_objects"        default=""/>
-    <arg name="skip_objects"        default=""/>
+from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
+from launch_ros.actions import Node
 
 
-    <!-- Nodes -->
+def generate_launch_description():
+    return LaunchDescription([
+        # Declare launch arguments
+        DeclareLaunchArgument('use_cuda', default_value='true', description='Use CUDA for object detection'),
+        DeclareLaunchArgument('enable_bbox_image', default_value='false', description='Enable bounding box image output'),
+        DeclareLaunchArgument('image', default_value='image', description='Input image topic'),
+        DeclareLaunchArgument('objects', default_value='objects', description='Output objects topic'),
+        DeclareLaunchArgument('bbox_image', default_value='bbox_image', description='Output bounding box image topic'),
+        DeclareLaunchArgument('max_age', default_value='30', description='Maximum age for tracking'),
+        DeclareLaunchArgument('model_path', default_value='yolov8n.pt', description='Path to YOLO model'),
+        DeclareLaunchArgument('only_objects', default_value='', description='Only detect specified objects'),
+        DeclareLaunchArgument('skip_objects', default_value='', description='Skip specified objects'),
 
-    <node name="object_detect" pkg="svea_vision" type="object_detect.py" output="screen">
-        <!-- Options -->
-        <param name="use_cuda"          value="$(arg use_cuda)" />
-        <param name="enable_bbox_image" value="$(arg enable_bbox_image)" />
-        <!-- Topics -->
-        <param name="sub_image"         value="$(arg image)" />
-        <param name="pub_objects"       value="$(arg objects)" />
-        <param name="pub_bbox_image"    value="$(arg bbox_image)" />
-        <!-- Auxiliary -->
-        <param name="only_objects"      value="$(arg only_objects)" />
-        <param name="skip_objects"      value="$(arg skip_objects)" />
-        <param name="max_age"           value="$(arg max_age)" />
-        <param name="model_path"        value="$(arg model_path)" />
-    </node>
-
-</launch>
+        # Launch the object_detect node
+        Node(
+            package='svea_vision',
+            executable='object_detect',
+            name='object_detect',
+            output='screen',
+            parameters=[{
+                'use_cuda': LaunchConfiguration('use_cuda'),
+                'enable_bbox_image': LaunchConfiguration('enable_bbox_image'),
+                'sub_image': LaunchConfiguration('image'),
+                'pub_objects': LaunchConfiguration('objects'),
+                'pub_bbox_image': LaunchConfiguration('bbox_image'),
+                'only_objects': LaunchConfiguration('only_objects'),
+                'skip_objects': LaunchConfiguration('skip_objects'),
+                'max_age': LaunchConfiguration('max_age'),
+                'model_path': LaunchConfiguration('model_path'),
+            }]
+        )
+    ])

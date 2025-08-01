@@ -1,6 +1,7 @@
 #! /usr/bin/env python3
 
-import rospy
+import rclpy
+from rclpy.node import Node
 from sensor_msgs.msg import Image, CameraInfo
 
 import cv2
@@ -9,12 +10,6 @@ import numpy as np
 from ultralytics import YOLO
 
 from svea_vision_msgs.msg import Object, StampedObjectArray
-
-
-def load_param(name, value=None):
-    if value is None:
-        assert rospy.has_param(name), f'Missing parameter "{name}"'
-    return rospy.get_param(name, value)
 
 
 def replace_base(old, new):
@@ -58,45 +53,54 @@ def iou(box1, box2):
     return area_i / area_u
 
 
-class object_detect:
+class ObjectDetect(Node):
     def __init__(self):
-        ## Initialize node
-
-        rospy.init_node("object_detect")
+        super().__init__("object_detect")
 
         ## Parameters
+        self.declare_parameter("enable_bbox_image", False)
+        self.declare_parameter("sub_image", "image")
+        self.declare_parameter("image_width", 640)
+        self.declare_parameter("image_height", 480)
+        self.declare_parameter("pub_bbox_image", "bbox_image")
+        self.declare_parameter("use_cuda", False)
+        self.declare_parameter("model_path", "yolov8n.pt")
+        self.declare_parameter("only_objects", "")
+        self.declare_parameter("skip_objects", "")
+        self.declare_parameter("max_age", 30)
+        self.declare_parameter("pub_objects", "objects")
 
-        self.ENABLE_BBOX_IMAGE = load_param("~enable_bbox_image", False)
+        self.ENABLE_BBOX_IMAGE = self.get_parameter("enable_bbox_image").get_parameter_value().bool_value
 
-        self.SUB_IMAGE = load_param("~sub_image", "image")
+        self.SUB_IMAGE = self.get_parameter("sub_image").get_parameter_value().string_value
         self.SUB_CAMERA_INFO = replace_base(self.SUB_IMAGE, "camera_info")
 
-        self.IMAGE_WIDTH = load_param("~image_width", 640)
-        self.IMAGE_HEIGHT = load_param("~image_height", 480)
+        self.IMAGE_WIDTH = self.get_parameter("image_width").get_parameter_value().integer_value
+        self.IMAGE_HEIGHT = self.get_parameter("image_height").get_parameter_value().integer_value
 
-        self.PUB_BBOX_IMAGE = load_param("~pub_bbox_image", "bbox_image")
+        self.PUB_BBOX_IMAGE = self.get_parameter("pub_bbox_image").get_parameter_value().string_value
         self.PUB_CAMERA_INFO = replace_base(self.PUB_BBOX_IMAGE, "camera_info")
 
-        self.USE_CUDA = load_param("~use_cuda", False)
-        self.MODEL_PATH = load_param("~model_path", "yolov8n.pt")
+        self.USE_CUDA = self.get_parameter("use_cuda").get_parameter_value().bool_value
+        self.MODEL_PATH = self.get_parameter("model_path").get_parameter_value().string_value
 
         # Space separated list, e.g. 'bed cup dog'
-        self.ONLY_OBJECTS = load_param("~only_objects", "").split()
-        self.SKIP_OBJECTS = load_param("~skip_objects", "").split()
+        self.ONLY_OBJECTS = self.get_parameter("only_objects").get_parameter_value().string_value.split()
+        self.SKIP_OBJECTS = self.get_parameter("skip_objects").get_parameter_value().string_value.split()
 
-        self.MAX_AGE = load_param("~max_age", 30)
+        self.MAX_AGE = self.get_parameter("max_age").get_parameter_value().integer_value
 
-        self.PUB_OBJECTS = load_param("~pub_objects", "objects")
+        self.PUB_OBJECTS = self.get_parameter("pub_objects").get_parameter_value().string_value
 
         ## Neural Network
 
         self.model = YOLO(self.MODEL_PATH)
 
         if self.USE_CUDA:
-            rospy.loginfo("CUDA enabled")
+            self.get_logger().info("CUDA enabled")
             self.model.to("cuda")
         else:
-            rospy.loginfo("CUDA disabled")
+            self.get_logger().info("CUDA disabled")
 
         classes = {lbl: cls for cls, lbl in self.model.names.items()}
         self.label_to_class = lambda label: classes[label]
@@ -108,30 +112,30 @@ class object_detect:
 
         ## Publishers
 
-        self.pub_objects = rospy.Publisher(
-            self.PUB_OBJECTS, StampedObjectArray, queue_size=10
+        self.pub_objects = self.create_publisher(
+            StampedObjectArray, self.PUB_OBJECTS, 10
         )
-        rospy.loginfo(self.PUB_OBJECTS)
+        self.get_logger().info(f"Publishing to: {self.PUB_OBJECTS}")
 
         if self.ENABLE_BBOX_IMAGE:
-            self.pub_bbox_image = rospy.Publisher(
-                self.PUB_BBOX_IMAGE, Image, queue_size=1
+            self.pub_bbox_image = self.create_publisher(
+                Image, self.PUB_BBOX_IMAGE, 1
             )
-            rospy.loginfo(self.PUB_BBOX_IMAGE)
+            self.get_logger().info(f"Publishing to: {self.PUB_BBOX_IMAGE}")
 
         ## Subscribers
 
-        rospy.Subscriber(self.SUB_IMAGE, Image, self.callback, queue_size=1, buff_size=2**24)
-        rospy.loginfo(self.SUB_IMAGE)
+        self.sub_image = self.create_subscription(Image, self.SUB_IMAGE, self.callback, 1)
+        self.get_logger().info(f"Subscribing to: {self.SUB_IMAGE}")
 
         ## Relay (sub->pub) camera info
 
         if self.ENABLE_BBOX_IMAGE:
-            pub = rospy.Publisher(self.PUB_CAMERA_INFO, CameraInfo, queue_size=1)
-            rospy.Subscriber(self.SUB_CAMERA_INFO, CameraInfo, pub.publish)
+            self.pub_camera_info = self.create_publisher(CameraInfo, self.PUB_CAMERA_INFO, 1)
+            self.sub_camera_info = self.create_subscription(CameraInfo, self.SUB_CAMERA_INFO, self.pub_camera_info.publish, 1)
 
     def run(self):
-        rospy.spin()
+        rclpy.spin(self)
 
     def callback(self, image):
         ## Detect objects
@@ -208,7 +212,20 @@ class object_detect:
             self.pub_objects.publish(object_array)
 
 
-if __name__ == "__main__":
+def main():
     ##  Start node  ##
 
-    object_detect().run()
+    rclpy.init()
+    node = ObjectDetect()
+    
+    try:
+        node.run()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == "__main__":
+    main()

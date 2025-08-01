@@ -1,82 +1,88 @@
-<?xml version="1.0"?>
+#!/usr/bin/env python3
 
-<launch>
+from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
+from launch_ros.actions import Node
 
-    <!-- Model parameters -->
-    <arg name="sam_model_name"              default="FastSAM-x.pt"/>
-    <arg name="sam_conf"                    default="0.4"/>
-    <arg name="sam_iou"                     default="0.9"/>
-    <arg name="owl_model_name"              default="google/owlvit-base-patch32"/>
-    <arg name="owl_image_encoder_path"      default="/opt/nanoowl/data/owl_image_encoder_patch32.engine"/>
-    <arg name="owl_threshold"               default="0.1"/>
-    <arg name="owl_roi"                     default="[0.25, 0.50, 0.75, 0.95]"/>
 
-    <!-- Prompt parameters -->
-    <arg name="prompt_type"                 default="bbox"/>
-    <arg name="prompt_bbox"                 default="[0.30, 0.50, 0.70, 0.90]"/>
-    <arg name="prompt_points"               default="[[0.50, 0.90]]"/>
-    <arg name="prompt_text"                 default="a sidewalk or footpath or walkway or paved path"/>
-    <arg name="use_bbox_fallback"           default="true"/>
+def generate_launch_description():
+    return LaunchDescription([
+        # Declare launch arguments - Model parameters
+        DeclareLaunchArgument('sam_model_name', default_value='FastSAM-x.pt', description='SAM model name'),
+        DeclareLaunchArgument('sam_conf', default_value='0.4', description='SAM confidence threshold'),
+        DeclareLaunchArgument('sam_iou', default_value='0.9', description='SAM IoU threshold'),
+        DeclareLaunchArgument('owl_model_name', default_value='google/owlvit-base-patch32', description='OWL model name'),
+        DeclareLaunchArgument('owl_image_encoder_path', default_value='/opt/nanoowl/data/owl_image_encoder_patch32.engine', description='OWL image encoder path'),
+        DeclareLaunchArgument('owl_threshold', default_value='0.1', description='OWL threshold'),
+        DeclareLaunchArgument('owl_roi', default_value='[0.25, 0.50, 0.75, 0.95]', description='OWL ROI'),
 
-    <!-- Other parameters -->
-    <arg name="use_cuda"                    default="true"/>
-    <arg name="brightness_window"           default="0.5"/>
-    <arg name="mean_brightness"             default="0.5"/>
-    <arg name="frame_id"                    default=""/>
-    <arg name="verbose"                     default="false"/>
+        # Prompt parameters
+        DeclareLaunchArgument('prompt_type', default_value='bbox', description='Prompt type'),
+        DeclareLaunchArgument('prompt_bbox', default_value='[0.30, 0.50, 0.70, 0.90]', description='Prompt bounding box'),
+        DeclareLaunchArgument('prompt_points', default_value='[[0.50, 0.90]]', description='Prompt points'),
+        DeclareLaunchArgument('prompt_text', default_value='a sidewalk or footpath or walkway or paved path', description='Prompt text'),
+        DeclareLaunchArgument('use_bbox_fallback', default_value='true', description='Use bbox fallback'),
 
-    <!-- Publish parameters -->
-    <arg name="publish_mask"                default="true"/>
-    <arg name="publish_image"               default="true"/>
-    <arg name="publish_pointcloud"          default="true"/>
+        # Other parameters
+        DeclareLaunchArgument('use_cuda', default_value='true', description='Use CUDA'),
+        DeclareLaunchArgument('brightness_window', default_value='0.5', description='Brightness window'),
+        DeclareLaunchArgument('mean_brightness', default_value='0.5', description='Mean brightness'),
+        DeclareLaunchArgument('frame_id', default_value='', description='Frame ID'),
+        DeclareLaunchArgument('verbose', default_value='false', description='Verbose output'),
 
-    <!-- Consumed topics -->
-    <arg name="rgb_topic"                   default="/zed/zed_node/rgb/image_rect_color"/>
-    <arg name="pointcloud_topic"            default="/zed/zed_node/point_cloud/cloud_registered"/>
+        # Publish parameters
+        DeclareLaunchArgument('publish_mask', default_value='true', description='Publish mask'),
+        DeclareLaunchArgument('publish_image', default_value='true', description='Publish image'),
+        DeclareLaunchArgument('publish_pointcloud', default_value='true', description='Publish pointcloud'),
 
-    <!-- Produced topics -->
-    <arg name="sidewalk_mask_topic"         default="sidewalk_mask"/>
-    <arg name="sidewalk_image_topic"        default="sidewalk_image"/>
-    <arg name="sidewalk_pointcloud_topic"   default="sidewalk_pointcloud"/>
+        # Consumed topics
+        DeclareLaunchArgument('rgb_topic', default_value='/zed/zed_node/rgb/image_rect_color', description='RGB topic'),
+        DeclareLaunchArgument('pointcloud_topic', default_value='/zed/zed_node/point_cloud/cloud_registered', description='Pointcloud topic'),
 
-    <!-- Nodes -->
-    <node name="sidewalk_segmentation" pkg="svea_vision" type="segment_anything.py" output="screen">
-        <!-- Model parameters -->
-        <param name="sam_model_name"                value="$(arg sam_model_name)"/>
-        <param name="sam_conf"                      value="$(arg sam_conf)"/>
-        <param name="sam_iou"                       value="$(arg sam_iou)"/>
-        <param name="owl_model_name"                value="$(arg owl_model_name)"/>
-        <param name="owl_image_encoder_path"        value="$(arg owl_image_encoder_path)"/>
-        <param name="owl_threshold"                 value="$(arg owl_threshold)"/>
-        <param name="owl_roi"                       value="$(arg owl_roi)"/>
+        # Produced topics
+        DeclareLaunchArgument('sidewalk_mask_topic', default_value='sidewalk_mask', description='Sidewalk mask topic'),
+        DeclareLaunchArgument('sidewalk_image_topic', default_value='sidewalk_image', description='Sidewalk image topic'),
+        DeclareLaunchArgument('sidewalk_pointcloud_topic', default_value='sidewalk_pointcloud', description='Sidewalk pointcloud topic'),
 
-        <!-- Prompt parameters -->
-        <param name="prompt_type"                   value="$(arg prompt_type)"/>
-        <param name="prompt_bbox"                   value="$(arg prompt_bbox)"/>
-        <param name="prompt_points"                 value="$(arg prompt_points)"/>
-        <param name="prompt_text"                   value="$(arg prompt_text)"/>
-        <param name="use_bbox_fallback"             value="$(arg use_bbox_fallback)"/>
-
-        <!-- Other parameters -->
-        <param name="use_cuda"                      value="$(arg use_cuda)"/>
-        <param name="brightness_window"             value="$(arg brightness_window)"/>
-        <param name="mean_brightness"               value="$(arg mean_brightness)"/>
-        <param name="frame_id"                      value="$(arg frame_id)"/>
-        <param name="verbose"                       value="$(arg verbose)"/>
-
-        <!-- Publish parameters -->
-        <param name="publish_mask"                  value="$(arg publish_mask)"/>
-        <param name="publish_image"                 value="$(arg publish_image)"/>
-        <param name="publish_pointcloud"            value="$(arg publish_pointcloud)"/>
-
-        <!-- Consumed topics -->
-        <param name="rgb_topic"                     value="$(arg rgb_topic)"/>
-        <param name="pointcloud_topic"              value="$(arg pointcloud_topic)"/>
-
-        <!-- Produced topics -->
-        <param name="segmented_mask_topic"          value="$(arg sidewalk_mask_topic)"/>
-        <param name="segmented_image_topic"         value="$(arg sidewalk_image_topic)"/>
-        <param name="segmented_pointcloud_topic"    value="$(arg sidewalk_pointcloud_topic)"/>
-    </node>
-
-</launch>
+        # Launch the sidewalk_segmentation node
+        Node(
+            package='svea_vision',
+            executable='segment_anything',
+            name='sidewalk_segmentation',
+            output='screen',
+            parameters=[{
+                # Model parameters
+                'sam_model_name': LaunchConfiguration('sam_model_name'),
+                'sam_conf': LaunchConfiguration('sam_conf'),
+                'sam_iou': LaunchConfiguration('sam_iou'),
+                'owl_model_name': LaunchConfiguration('owl_model_name'),
+                'owl_image_encoder_path': LaunchConfiguration('owl_image_encoder_path'),
+                'owl_threshold': LaunchConfiguration('owl_threshold'),
+                'owl_roi': LaunchConfiguration('owl_roi'),
+                # Prompt parameters
+                'prompt_type': LaunchConfiguration('prompt_type'),
+                'prompt_bbox': LaunchConfiguration('prompt_bbox'),
+                'prompt_points': LaunchConfiguration('prompt_points'),
+                'prompt_text': LaunchConfiguration('prompt_text'),
+                'use_bbox_fallback': LaunchConfiguration('use_bbox_fallback'),
+                # Other parameters
+                'use_cuda': LaunchConfiguration('use_cuda'),
+                'brightness_window': LaunchConfiguration('brightness_window'),
+                'mean_brightness': LaunchConfiguration('mean_brightness'),
+                'frame_id': LaunchConfiguration('frame_id'),
+                'verbose': LaunchConfiguration('verbose'),
+                # Publish parameters
+                'publish_mask': LaunchConfiguration('publish_mask'),
+                'publish_image': LaunchConfiguration('publish_image'),
+                'publish_pointcloud': LaunchConfiguration('publish_pointcloud'),
+                # Consumed topics
+                'rgb_topic': LaunchConfiguration('rgb_topic'),
+                'pointcloud_topic': LaunchConfiguration('pointcloud_topic'),
+                # Produced topics
+                'segmented_mask_topic': LaunchConfiguration('sidewalk_mask_topic'),
+                'segmented_image_topic': LaunchConfiguration('sidewalk_image_topic'),
+                'segmented_pointcloud_topic': LaunchConfiguration('sidewalk_pointcloud_topic'),
+            }]
+        )
+    ])

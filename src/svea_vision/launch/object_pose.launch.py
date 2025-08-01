@@ -1,49 +1,57 @@
-<?xml version="1.0"?>
-<launch>
+#!/usr/bin/env python3
 
-    <!-- Options -->
-    <arg name="use_cuda"            default="true"/>
-    <arg name="enable_bbox_image"   default="false"/>
-    <arg name="frame_id"            default="map"/>
-
-    <!-- Consumed topics -->
-    <arg name="image"               default="image" />
-    <arg name="depth_image"         default="depth_image" />
-
-    <!-- Produced topics -->
-    <arg name="objects"             default="objects"/>
-    <arg name="bbox_image"          default="bbox_image"/>
-    <arg name="objectposes"         default="objectposes" />
-
-    <!-- Auxiliary -->
-    <arg name="max_age"             default="30"/>
-    <arg name="model_path"          default="yolov8n.pt"/>
-    <arg name="only_objects"        default=""/>
-    <arg name="skip_objects"        default=""/>
+from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
+from launch_ros.actions import Node
 
 
-    <!-- Nodes -->
-    <node name="object_detect" pkg="svea_vision" type="object_detect.py" output="screen">
-        <!-- Options -->
-        <param name="use_cuda"          value="$(arg use_cuda)"/>
-        <param name="enable_bbox_image" value="$(arg enable_bbox_image)"/>
-        <!-- Topics -->
-        <param name="sub_image"         value="$(arg image)"/>
-        <param name="pub_objects"       value="$(arg objects)"/>
-        <param name="pub_bbox_image"    value="$(arg bbox_image)"/>
-        <!-- Auxiliary -->
-        <param name="only_objects"      value="$(arg only_objects)"/>
-        <param name="skip_objects"      value="$(arg skip_objects)"/>
-        <param name="max_age"           value="$(arg max_age)"/>
-        <param name="model_path"        value="$(arg model_path)"/>
-    </node>
+def generate_launch_description():
+    return LaunchDescription([
+        # Declare launch arguments
+        DeclareLaunchArgument('use_cuda', default_value='true', description='Use CUDA for object detection'),
+        DeclareLaunchArgument('enable_bbox_image', default_value='false', description='Enable bounding box image output'),
+        DeclareLaunchArgument('frame_id', default_value='map', description='Frame ID for object poses'),
+        DeclareLaunchArgument('image', default_value='image', description='Input image topic'),
+        DeclareLaunchArgument('depth_image', default_value='depth_image', description='Input depth image topic'),
+        DeclareLaunchArgument('objects', default_value='objects', description='Objects topic'),
+        DeclareLaunchArgument('bbox_image', default_value='bbox_image', description='Output bounding box image topic'),
+        DeclareLaunchArgument('objectposes', default_value='objectposes', description='Output object poses topic'),
+        DeclareLaunchArgument('max_age', default_value='30', description='Maximum age for tracking'),
+        DeclareLaunchArgument('model_path', default_value='yolov8n.pt', description='Path to YOLO model'),
+        DeclareLaunchArgument('only_objects', default_value='', description='Only detect specified objects'),
+        DeclareLaunchArgument('skip_objects', default_value='', description='Skip specified objects'),
 
-    <node name="object_pose" pkg="svea_vision" type="object_pose.py" output="screen">
-        <!-- Topics -->
-        <param name="sub_depth_image"   value="$(arg depth_image)"/>
-        <param name="sub_objects"       value="$(arg objects)"/>
-        <param name="pub_objectposes"   value="$(arg objectposes)"/>
-        <param name="frame_id"          value="$(arg frame_id)"/>
-    </node>
+        # Launch the object_detect node
+        Node(
+            package='svea_vision',
+            executable='object_detect',
+            name='object_detect',
+            output='screen',
+            parameters=[{
+                'use_cuda': LaunchConfiguration('use_cuda'),
+                'enable_bbox_image': LaunchConfiguration('enable_bbox_image'),
+                'sub_image': LaunchConfiguration('image'),
+                'pub_objects': LaunchConfiguration('objects'),
+                'pub_bbox_image': LaunchConfiguration('bbox_image'),
+                'only_objects': LaunchConfiguration('only_objects'),
+                'skip_objects': LaunchConfiguration('skip_objects'),
+                'max_age': LaunchConfiguration('max_age'),
+                'model_path': LaunchConfiguration('model_path'),
+            }]
+        ),
 
-</launch>
+        # Launch the object_pose node
+        Node(
+            package='svea_vision',
+            executable='object_pose',
+            name='object_pose',
+            output='screen',
+            parameters=[{
+                'sub_depth_image': LaunchConfiguration('depth_image'),
+                'sub_objects': LaunchConfiguration('objects'),
+                'pub_objectposes': LaunchConfiguration('objectposes'),
+                'frame_id': LaunchConfiguration('frame_id'),
+            }]
+        )
+    ])

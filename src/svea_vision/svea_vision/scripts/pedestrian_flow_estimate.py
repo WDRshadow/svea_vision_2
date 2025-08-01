@@ -2,7 +2,8 @@
 
 from collections import deque
 import numpy as np
-import rospy
+import rclpy
+from rclpy.node import Node
 from geometry_msgs.msg import Pose
 from std_msgs.msg import Float64
 from svea_vision_msgs.msg import StampedObjectPoseArray, PersonState, PersonStateArray
@@ -11,7 +12,7 @@ from svea_vision_msgs.msg import StampedObjectPoseArray, PersonState, PersonStat
 # Purpose: To track and predict the flow of pedestrians detected by a camera system using moving average filters
 
 
-class PedestrianFlowEstimator:
+class PedestrianFlowEstimator(Node):
     """
     This class estimates the speed and acceleration of detected people using moving average filtering. 
     Pedestrian positions are extracted from the detection splitter topic and processed if they are not 
@@ -34,32 +35,35 @@ class PedestrianFlowEstimator:
     person_states = dict()
 
     def __init__(self):
-        rospy.init_node("pedestrian_flow_estimate", anonymous=True)
+        super().__init__("pedestrian_flow_estimate")
         # load parameters
         self.MAX_HISTORY_LEN = 4                                              # Used for pose_deque and time_deque dimension.
-        self.DISCARD_THRESHOLD = rospy.get_param('~discard_id_threshold')     # Used to detect wrong pose estimate due to pedestrian boxes distortion
-        self.MAX_TIME_MISSING = rospy.get_param('~max_time_missing')          # drop id after certain time [seconds]
-        self.FREQUENCY_VEL = rospy.get_param('~vel_filter_window')            # Velocity filter frequency
+        self.declare_parameter('discard_id_threshold', 0.5)
+        self.declare_parameter('max_time_missing', 5.0)
+        self.declare_parameter('vel_filter_window', 10)
+        self.declare_parameter('persons_topic', '/detection_splitter/persons')
+        
+        self.DISCARD_THRESHOLD = self.get_parameter('discard_id_threshold').get_parameter_value().double_value     # Used to detect wrong pose estimate due to pedestrian boxes distortion
+        self.MAX_TIME_MISSING = self.get_parameter('max_time_missing').get_parameter_value().double_value          # drop id after certain time [seconds]
+        self.FREQUENCY_VEL = self.get_parameter('vel_filter_window').get_parameter_value().integer_value            # Velocity filter frequency
         self.FREQUENCY_ACC = int(self.FREQUENCY_VEL * 2 / 3)                  # Acceleration filter frequency
         self.SPEED_ACCELERATION_LENGTH = int(self.FREQUENCY_VEL * 4 / 3)      # buffer dimension of speed and acceleration deques
         # Publishers
-        self.pub1 = rospy.Publisher('~float_1', Float64, queue_size=10)
-        self.pub2 = rospy.Publisher('~float_2', Float64, queue_size=10)
-        self.pub3 = rospy.Publisher('~pedestrian_flow_estimate', PersonStateArray, queue_size=10)
+        self.pub1 = self.create_publisher(Float64, '~/float_1', 10)
+        self.pub2 = self.create_publisher(Float64, '~/float_2', 10)
+        self.pub3 = self.create_publisher(PersonStateArray, '~/pedestrian_flow_estimate', 10)
 
     def __listener(self):
         """Subscribes to the topic containing only detected
         persons and applies the function __callback."""
 
-        persons_topic = rospy.get_param('~persons_topic', '/detection_splitter/persons')
-        rospy.Subscriber(
-            persons_topic,
+        persons_topic = self.get_parameter('persons_topic').get_parameter_value().string_value
+        self.create_subscription(
             StampedObjectPoseArray,
+            persons_topic,
             self.__callback,
+            10
         )
-
-        while not rospy.is_shutdown():
-            rospy.spin()
 
     def __callback(self, msg):
         """This method is a callback function that is triggered when a message is received.
@@ -68,6 +72,7 @@ class PedestrianFlowEstimator:
 
         personStateArray_msg = PersonStateArray()
         personStateArray_msg.header = msg.header
+        current_time = msg.header.stamp.sec + msg.header.stamp.nanosec/1e9
 
         for person in msg.objects:
             # Get the person's ID and current location and time
@@ -77,7 +82,7 @@ class PedestrianFlowEstimator:
                 person.pose.pose.position.y,
                 person.pose.pose.position.z,
             )
-            current_time = msg.header.stamp.secs + msg.header.stamp.nsecs/1e9
+            # current_time already defined outside the loop
 
             # Append the current person's location in the dict. Same for message's time stamp.
             if person_id in self.x_dict:
@@ -118,7 +123,7 @@ class PedestrianFlowEstimator:
             state.vy = vy
             state.ax = ax
             state.ay = ay
-            state.counter = msg.header.seq
+            state.counter = 0  # ROS2 headers don't have seq field
 
             # Update the dictionary with {ID: PersonState}
             self.person_states[person_id] = state
@@ -237,5 +242,17 @@ class PedestrianFlowEstimator:
         self.__listener()
 
 
+def main(args=None):
+    rclpy.init(args=args)
+    estimator = PedestrianFlowEstimator()
+    try:
+        rclpy.spin(estimator)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        estimator.destroy_node()
+        rclpy.shutdown()
+
+
 if __name__ == "__main__":
-    PedestrianFlowEstimator().start()
+    main()
