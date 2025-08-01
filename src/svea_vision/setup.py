@@ -1,5 +1,4 @@
 from setuptools import find_packages, setup
-import os
 from glob import glob
 
 package_name = 'svea_vision'
@@ -14,7 +13,11 @@ setup(
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/launch', glob('launch/*.py')),
     ],
-    install_requires=['setuptools'],
+    install_requires=[
+        'setuptools',
+        'ultralytics==8.2.0',
+        'filterpy'
+    ],
     zip_safe=True,
     maintainer='jackdaw',
     maintainer_email='wdrshadow@gmail.com',
