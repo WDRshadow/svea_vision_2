@@ -18,7 +18,7 @@ def linear_test(T):
         phi = t / 5  # Derivative of truth_traj_y equation
         z = [truth_traj_x[t], truth_traj_y[t], 1, phi]
         kf.update(z)
-        m_traj.append(kf.x[0:2])
+        m_traj.append(kf.x[0:2].tolist())
 
     m_traj_x, m_traj_y = [], []
     for t in range(T):
@@ -53,7 +53,7 @@ def circle_test(radius, T):
         phi = atan2(diff_y, diff_x)
         z = [circle_traj_x[t], circle_traj_y[t], 1, phi]
         kf.update(z)
-        c_traj.append(kf.x[0:2])
+        c_traj.append(kf.x[0:2].tolist())
 
     c_traj_x, c_traj_y = [], []
     for t in range(T):

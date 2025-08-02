@@ -5,6 +5,7 @@ import numpy as np
 import rclpy
 from rclpy.node import Node
 from rclpy.time import Time
+from rclpy.duration import Duration
 import tf2_ros
 import message_filters as mf
 from std_msgs.msg import ColorRGBA
@@ -197,15 +198,31 @@ class object_pose(Node):
         marker.type = Marker.SPHERE_LIST
         marker.action = 0
         marker.pose.orientation.w = 1
-        marker.scale = Vector3(0.2, 0.2, 0.2)
-        marker.lifetime = rospy.Duration(0.5)
+        marker.scale.x = 0.2
+        marker.scale.y = 0.2
+        marker.scale.z = 0.2
+        marker.lifetime = Duration(nanoseconds=int(0.5 * 1e9)).to_msg()
 
+        colors = []
+        points = []
+        
         for objpose in msg.objects:
+            color = ColorRGBA()
             if objpose.object.label == "person":
-                marker.colors.append(ColorRGBA(0, 1, 0, 1))
+                color.r = 0.0
+                color.g = 1.0
+                color.b = 0.0
+                color.a = 1.0
             else:
-                marker.colors.append(ColorRGBA(1, 0, 0, 1))
-            marker.points.append(objpose.pose.pose.position)
+                color.r = 1.0
+                color.g = 0.0
+                color.b = 0.0
+                color.a = 1.0
+            colors.append(color)
+            points.append(objpose.pose.pose.position)
+
+        marker.colors = colors
+        marker.points = points
 
         self.pub_objectmarkers.publish(marker)
 
