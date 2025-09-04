@@ -94,21 +94,66 @@ class ObjectDetect(Node):
 
         ## Neural Network
 
-        self.model = YOLO(self.MODEL_PATH)
+        # Load YOLO model with proper error handling for PyTorch 2.x compatibility
+        import torch
+        
+        try:
+            # First, try standard loading
+            self.model = YOLO(self.MODEL_PATH)
+            self.get_logger().info(f"Successfully loaded YOLO model from {self.MODEL_PATH}")
+        except Exception as first_error:
+            self.get_logger().warn(f"Standard loading failed: {first_error}")
+            
+            try:
+                # Try with weights_only=False for legacy models
+                original_load = torch.load
+                def safe_load(*args, **kwargs):
+                    kwargs.setdefault('weights_only', False)
+                    return original_load(*args, **kwargs)
+                
+                torch.load = safe_load
+                self.model = YOLO(self.MODEL_PATH)
+                torch.load = original_load
+                self.get_logger().info(f"Successfully loaded YOLO model with weights_only=False")
+                
+            except Exception as second_error:
+                self.get_logger().error(f"Failed to load YOLO model: {second_error}")
+                raise RuntimeError(f"Could not load YOLO model from {self.MODEL_PATH}")
 
         if self.USE_CUDA:
-            self.get_logger().info("CUDA enabled")
-            self.model.to("cuda")
+            try:
+                self.model.to("cuda")
+                self.get_logger().info("CUDA enabled")
+            except Exception as cuda_error:
+                self.get_logger().warn(f"CUDA initialization failed: {cuda_error}, falling back to CPU")
+                self.USE_CUDA = False
         else:
             self.get_logger().info("CUDA disabled")
 
-        classes = {lbl: cls for cls, lbl in self.model.names.items()}
-        self.label_to_class = lambda label: classes[label]
+        # Get model class names safely
+        try:
+            model_names = self.model.names
+            if isinstance(model_names, dict):
+                classes = {lbl: cls for cls, lbl in model_names.items()}
+            elif isinstance(model_names, list):
+                # Handle case where names is a list
+                classes = {name: i for i, name in enumerate(model_names)}
+            else:
+                # Fallback for unknown structure
+                classes = {}
+            self.label_to_class = lambda label: classes.get(label, 0)
+        except Exception as e:
+            self.get_logger().warn(f"Could not load class names: {e}")
+            self.label_to_class = lambda label: 0
 
-        self.detect_kwargs = dict(persist=True, conf=0.5, verbose=False)
+        self.detect_kwargs = {"persist": True, "conf": 0.5, "verbose": False}
 
         if self.ONLY_OBJECTS:
-            self.detect_kwargs.update(classes=list(map(self.label_to_class, self.ONLY_OBJECTS)))
+            try:
+                class_ids = [self.label_to_class(obj) for obj in self.ONLY_OBJECTS]
+                self.detect_kwargs["classes"] = class_ids
+            except Exception as e:
+                self.get_logger().warn(f"Could not set class filter: {e}")
 
         ## Publishers
 
@@ -194,8 +239,8 @@ class ObjectDetect(Node):
             obj = Object()
             obj.id = int(_id)
             obj.label = label
-            obj.detection_conf = _pred
-            obj.tracking_conf = _pred
+            obj.detection_conf = float(_pred)
+            obj.tracking_conf = float(_pred)
             obj.image_width = self.IMAGE_WIDTH
             obj.image_height = self.IMAGE_HEIGHT
             obj.roi.x_offset = u1

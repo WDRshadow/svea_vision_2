@@ -73,9 +73,9 @@ class object_pose(Node):
 
         self.ts = mf.TimeSynchronizer(
             [
-                mf.Subscriber(self.SUB_OBJECTS, StampedObjectArray),
-                mf.Subscriber(self.SUB_DEPTH_IMAGE, Image),
-                mf.Subscriber(self.SUB_CAMERA_INFO, CameraInfo),
+                mf.Subscriber(self, StampedObjectArray, self.SUB_OBJECTS),
+                mf.Subscriber(self, Image, self.SUB_DEPTH_IMAGE),
+                mf.Subscriber(self, CameraInfo, self.SUB_CAMERA_INFO),
             ],
             queue_size=10,
         )
@@ -197,7 +197,7 @@ class object_pose(Node):
         marker.header.stamp = msg.header.stamp
         marker.type = Marker.SPHERE_LIST
         marker.action = 0
-        marker.pose.orientation.w = 1
+        marker.pose.orientation.w = 1.0
         marker.scale.x = 0.2
         marker.scale.y = 0.2
         marker.scale.z = 0.2

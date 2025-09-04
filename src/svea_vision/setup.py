@@ -19,7 +19,7 @@ setup(
         'filterpy',
         'numba',
         'pandas',
-        'numpy'
+        'numpy<2.0'
     ],
     zip_safe=True,
     maintainer='jackdaw',

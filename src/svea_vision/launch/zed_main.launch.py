@@ -41,7 +41,7 @@ def generate_launch_description():
         DeclareLaunchArgument('aruco_size', default_value='0.1', description='ArUco marker size'),
 
         # Pedestrian state estimation constants
-        DeclareLaunchArgument('max_time_missing', default_value='1', description='Max time missing for pedestrian tracking'),
+        DeclareLaunchArgument('max_time_missing', default_value='1.0', description='Max time missing for pedestrian tracking'),
         DeclareLaunchArgument('vel_filter_window', default_value='15', description='Velocity filter window'),
         DeclareLaunchArgument('discard_id_threshold', default_value='0.5', description='Discard ID threshold'),
 
@@ -66,18 +66,13 @@ def generate_launch_description():
                 PathJoinSubstitution([
                     FindPackageShare('zed_wrapper'),
                     'launch',
-                    'zed_no_tf.launch.py'
+                    'zed_camera.launch.py'
                 ]),
                 launch_arguments={
                     'camera_name': LaunchConfiguration('camera_name'),
                     'camera_model': LaunchConfiguration('camera_model'),
-                    'base_frame': LaunchConfiguration('zed_base_frame'),
-                    'cam_pos_x': LaunchConfiguration('zed_cam_pos_x'),
-                    'cam_pos_y': LaunchConfiguration('zed_cam_pos_y'),
-                    'cam_pos_z': LaunchConfiguration('zed_cam_pos_z'),
-                    'cam_roll': LaunchConfiguration('zed_cam_roll'),
-                    'cam_pitch': LaunchConfiguration('zed_cam_pitch'),
-                    'cam_yaw': LaunchConfiguration('zed_cam_yaw'),
+                    # Note: zed_camera.launch.py doesn't support base_frame and cam_pos parameters
+                    # These would need to be handled differently if required
                 }.items()
             )
         ], scoped=True),

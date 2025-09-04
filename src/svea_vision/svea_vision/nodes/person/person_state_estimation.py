@@ -9,7 +9,7 @@ from geometry_msgs.msg import Pose, Twist
 from std_msgs.msg import Float64
 from svea_vision_msgs.msg import StampedObjectPoseArray, PersonState, PersonStateArray
 from scipy.optimize import curve_fit
-from svea_vision.svea_vision.utils.kalman_filter import KF
+from svea_vision.utils.kalman_filter import KF
 
 
 # Purpose: To track and predict the state of each object detected by a camera system,
@@ -60,6 +60,9 @@ class PersonStatePredictor(Node):
         
         :param msg: message containing the detected persons
         :return: None"""
+
+        # Increment the message counter for ROS 2 compatibility
+        self.counter += 1
 
         self.__update_frequency(msg)
         personStateArray_msg = PersonStateArray()
@@ -160,15 +163,15 @@ class PersonStatePredictor(Node):
                 state.pose = pose  # position and orientation
                 state.vx = v * cos(phi)
                 state.vy = v * sin(phi)
-                state.ax = 0
-                state.ay = 0
-                state.counter = msg.header.seq
+                state.ax = 0.0
+                state.ay = 0.0
+                state.counter = self.counter
 
                 # Update the dictionary with {ID: PersonState}
                 self.person_states[person_id] = state
 
         # Cleanup the dictionary of person_states
-        self.__clean_up_dict(msg.header.seq)
+        self.__clean_up_dict(self.counter)
 
         # Put the list of personstate in the message and publish it
         personStateArray_msg.personstate = list(self.person_states.values())
@@ -261,8 +264,7 @@ class PersonStatePredictor(Node):
         Function used to update the frequency of the message received on "/detection_splitter/persons".
         The frequency computation is done when MAX_HISTORY_LEN messages are received to filter undesired fluctuations.
         """
-        current_time = msg.header.stamp.secs + msg.header.stamp.nsecs/1e9
-        self.counter += 1
+        current_time = msg.header.stamp.sec + msg.header.stamp.nanosec/1e9
         if self.last_time is not None:
             time_diff = (current_time - self.last_time)
             self.total_time+=time_diff
