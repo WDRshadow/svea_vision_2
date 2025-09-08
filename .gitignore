@@ -6,3 +6,5 @@ log/
 *.pt
 images/*
 *.egg-info/
+src/zed-ros2-wrapper
+.venv/

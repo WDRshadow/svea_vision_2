@@ -14,7 +14,7 @@ setup(
         ('share/' + package_name + '/launch', glob('launch/*.py')),
     ],
     install_requires=[
-        'setuptools',
+        'setuptools<70.0.0',
         'ultralytics==8.2.0',
         'filterpy',
         'numba',
@@ -22,11 +22,11 @@ setup(
         'numpy<2.0'
     ],
     zip_safe=True,
-    maintainer='jackdaw',
-    maintainer_email='wdrshadow@gmail.com',
+    maintainer='Yunhao Xu',
+    maintainer_email='yunhaox@kth.se',
     description='The svea vision package',
     license='MIT',
-    tests_require=['pytest'],
+    # tests_require=['pytest'],
     entry_points={
         'console_scripts': [
             'aruco_detect = svea_vision.nodes.aruco.aruco_detect:main',
